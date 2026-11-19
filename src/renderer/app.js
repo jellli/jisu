@@ -63,7 +63,7 @@
     document.body.classList.add("fallback-modal");
     dialog.setAttribute("open", "");
     dialog.setAttribute("aria-modal", "true");
-    dialog.querySelector("[autofocus], button, input").focus();
+    (dialog.querySelector("[autofocus]") || dialog.querySelector("button, input, select")).focus();
     document.querySelector(".app-shell").setAttribute("aria-hidden", "true");
   }
 
