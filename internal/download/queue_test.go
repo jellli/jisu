@@ -139,6 +139,28 @@ func TestStreamFallbackAndNoOverwrite(t *testing.T) {
 	}
 }
 
+func TestStreamFallbackWhenServerOnlyHonorsProbe(t *testing.T) {
+	t.Parallel()
+	const upstream = "an entire small file"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("ETag", `"stable"`)
+		if r.Header.Get("Range") == "bytes=0-0" {
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-0/%d", len(upstream)))
+			w.WriteHeader(http.StatusPartialContent)
+			fmt.Fprint(w, upstream[:1])
+			return
+		}
+		fmt.Fprint(w, upstream)
+	}))
+	t.Cleanup(server.Close)
+	q, _, _ := openTestQueue(t)
+	if err := q.Add(server.URL + "/small.bin"); err != nil {
+		t.Fatal(err)
+	}
+	done := waitForState(t, q, 0, Completed)
+	assertOutput(t, q, done.ID, []byte(upstream))
+}
+
 type rangeFixture struct {
 	*httptest.Server
 	stall, replaced       atomic.Bool

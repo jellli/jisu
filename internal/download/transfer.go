@@ -28,6 +28,8 @@ type plan struct {
 
 type segment struct{ start, end int64 }
 
+var errRangeIgnored = errors.New("server ignored the requested byte range")
+
 func (p plan) segment(i int) segment {
 	width := p.Size / int64(p.Parts)
 	start := int64(i) * width
@@ -112,12 +114,9 @@ func (q *Queue) transfer(ctx context.Context, run *attempt, job *record) error {
 	defer resp.Body.Close()
 	name := responseName(resp)
 	var p *plan
-	var total *int64
 	switch resp.StatusCode {
 	case http.StatusOK:
-		if resp.ContentLength >= 0 {
-			total = new(resp.ContentLength)
-		}
+		return q.stream(ctx, run, job, dir, assembly, resp, false)
 	case http.StatusPartialContent:
 		first, last, size, ok := contentRange(resp.Header.Get("Content-Range"))
 		if !ok || first != 0 || last != 0 || !identityResponse(resp) {
@@ -131,88 +130,96 @@ func (q *Queue) transfer(ctx context.Context, run *attempt, job *record) error {
 				parts = 4
 			}
 			p = &plan{URL: resp.Request.URL.String(), Size: size, Validator: validator, Parts: parts}
-			total = new(size)
 		} else {
-			resp, err = q.request(ctx, job.URL, "", "")
-			if err != nil {
-				return err
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusOK {
-				return fmt.Errorf("server returned HTTP %d for the full download", resp.StatusCode)
-			}
-			if resp.ContentLength >= 0 {
-				total = new(resp.ContentLength)
-			}
-			name = responseName(resp)
+			return q.streamFull(ctx, run, job, dir, assembly)
 		}
 	case http.StatusRequestedRangeNotSatisfiable:
 		if resp.Header.Get("Content-Range") != "bytes */0" {
 			return fmt.Errorf("server returned HTTP %d", resp.StatusCode)
 		}
-		total = new(int64(0))
+		return q.stream(ctx, run, job, dir, assembly, resp, true)
 	default:
 		return fmt.Errorf("server returned HTTP %d", resp.StatusCode)
 	}
-	if resp.StatusCode == http.StatusOK && !identityResponse(resp) {
-		return errors.New("server sent an unexpected content encoding")
-	}
 	previousPlan := job.Plan
-	if p == nil || previousPlan == nil || *previousPlan != *p {
+	if previousPlan == nil || *previousPlan != *p {
 		if err := clearParts(dir); err != nil {
 			return err
 		}
 	}
-	sizes := []int64(nil)
+	sizes := make([]int64, p.Parts)
 	var existing int64
-	connections := 1
-	if p != nil {
-		sizes = make([]int64, p.Parts)
-		connections = 0
-		for i := range sizes {
-			span := p.segment(i)
-			filename := partPath(dir, i)
-			if info, err := os.Stat(filename); err == nil {
-				if info.Size() > span.end-span.start+1 {
-					if err := os.Remove(filename); err != nil {
-						return err
-					}
-				} else {
-					sizes[i] = info.Size()
+	connections := 0
+	for i := range sizes {
+		span := p.segment(i)
+		filename := partPath(dir, i)
+		if info, err := os.Stat(filename); err == nil {
+			if info.Size() > span.end-span.start+1 {
+				if err := os.Remove(filename); err != nil {
+					return err
 				}
-			} else if !errors.Is(err, os.ErrNotExist) {
-				return err
+			} else {
+				sizes[i] = info.Size()
 			}
-			existing += sizes[i]
-			if sizes[i] < span.end-span.start+1 {
-				connections++
-			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		existing += sizes[i]
+		if sizes[i] < span.end-span.start+1 {
+			connections++
 		}
 	}
-	if err := q.prepare(ctx, run, job, p, name, total, existing, connections); err != nil {
+	if err := q.prepare(ctx, run, job, p, name, new(p.Size), existing, connections); err != nil {
 		return err
 	}
-	if p != nil {
-		if err := q.downloadParts(ctx, job, dir, p, sizes); err != nil {
-			return err
+	if err := q.downloadParts(ctx, job, dir, p, sizes); errors.Is(err, errRangeIgnored) {
+		return q.streamFull(ctx, run, job, dir, assembly)
+	} else if err != nil {
+		return err
+	}
+	if err := joinParts(ctx, assembly, dir, p); err != nil {
+		return err
+	}
+	return q.complete(ctx, job, "", assembly)
+}
+
+func (q *Queue) streamFull(ctx context.Context, run *attempt, job *record, dir, assembly string) error {
+	resp, err := q.request(ctx, job.URL, "", "")
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server returned HTTP %d for the full download", resp.StatusCode)
+	}
+	return q.stream(ctx, run, job, dir, assembly, resp, false)
+}
+
+func (q *Queue) stream(ctx context.Context, run *attempt, job *record, dir, assembly string, resp *http.Response, empty bool) error {
+	if !empty && !identityResponse(resp) {
+		return errors.New("server sent an unexpected content encoding")
+	}
+	var body io.Reader = resp.Body
+	var total *int64
+	if empty {
+		body, total = strings.NewReader(""), new(int64(0))
+	} else if resp.ContentLength >= 0 {
+		total = new(resp.ContentLength)
+	}
+	if err := clearParts(dir); err != nil {
+		return err
+	}
+	if err := q.prepare(ctx, run, job, nil, responseName(resp), total, 0, 1); err != nil {
+		return err
+	}
+	if err := q.withFile(assembly, os.O_TRUNC, func(f *os.File) error {
+		n, err := io.Copy(progressWriter{f, q, job}, body)
+		if err == nil && total != nil && n != *total {
+			return io.ErrUnexpectedEOF
 		}
-		if err := joinParts(ctx, assembly, dir, p); err != nil {
-			return err
-		}
-	} else {
-		if err := q.withFile(assembly, os.O_TRUNC, func(f *os.File) error {
-			var body io.Reader = resp.Body
-			if total != nil && *total == 0 {
-				body = strings.NewReader("")
-			}
-			n, err := io.Copy(progressWriter{f, q, job}, body)
-			if err == nil && total != nil && n != *total {
-				return io.ErrUnexpectedEOF
-			}
-			return err
-		}); err != nil {
-			return err
-		}
+		return err
+	}); err != nil {
+		return err
 	}
 	return q.complete(ctx, job, "", assembly)
 }
@@ -263,6 +270,9 @@ func (q *Queue) downloadPart(ctx context.Context, job *record, filename string, 
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		return errRangeIgnored
+	}
 	first, last, size, ok := contentRange(resp.Header.Get("Content-Range"))
 	if resp.StatusCode != http.StatusPartialContent || !ok || first != start || last != end || size != p.Size ||
 		resp.Request.URL.String() != p.URL || !matchesValidator(resp, p.Validator) || !identityResponse(resp) {
