@@ -13,10 +13,10 @@ func TestComparisonFixturesAndPause(t *testing.T) {
 			t.Fatalf("row %d progress = %f, want %f", n, tasks[n].progress(), want)
 		}
 	}
-	if math.Abs(tasks[0].speed()-19.4) > 1e-9 || tasks[1].speed() != 0 || tasks[2].speed() != 0 {
+	if math.Abs(tasks[0].speed()-18.4) > 1e-9 || tasks[1].speed() != 0 || tasks[2].speed() != 0 {
 		t.Fatal("fixture transfer rates differ from PR #4")
 	}
-	if tasks[0].remaining() != "约 1 分 57 秒" {
+	if tasks[0].remaining() != "约 2 分 3 秒" {
 		t.Fatalf("ETA = %q", tasks[0].remaining())
 	}
 	tasks[0].toggle()

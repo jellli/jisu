@@ -47,7 +47,7 @@ Fixtures are copied from [PR #4](https://github.com/jellli/jisu/pull/4),
 Rates are `[0, 2.8, 2.3, 3.2, 2.7, 2.1, 2.5, 2.8]` MB/s, zero for inactive
 or complete connections; the same 2.4 MB/s fallback applies to connection 1
 if it is ever incomplete. Sizes, percentages, and ETA use the same decimal
-units and rounding. Initial totals are **63%, 19.4 MB/s**, **51%**, **100%**.
+units and rounding. Initial totals are **63%, 18.4 MB/s**, **51%**, **100%**.
 
 ## Design choices
 
