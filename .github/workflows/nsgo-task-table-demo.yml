@@ -1,0 +1,50 @@
+name: NSGo task table demo
+
+on:
+  push:
+    branches: ["devin/*-nsgo-task-table-demo"]
+    paths:
+      - ".github/workflows/nsgo-task-table-demo.yml"
+      - "prototypes/nsgo-tasks/**"
+      - "internal/download/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    name: Desktop demo (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, target: macos }
+          - { os: windows-latest, target: windows }
+    defaults:
+      run:
+        shell: bash
+        working-directory: prototypes/nsgo-tasks
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: prototypes/nsgo-tasks/go.mod
+          cache-dependency-path: prototypes/nsgo-tasks/go.sum
+      - name: Build and check
+        run: |
+          go tool nsgo check
+          go build .
+      - name: Test and capture the native window
+        run: go tool nsgo test -target ${{ matrix.target }} -timeout 90s
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: nsgo-task-table-${{ matrix.target }}
+          path: prototypes/nsgo-tasks/.nsgo/test/screenshots/**/*.png
+          if-no-files-found: error
+          retention-days: 14

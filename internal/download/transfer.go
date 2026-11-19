@@ -305,6 +305,7 @@ func (q *Queue) prepare(ctx context.Context, run *attempt, job *record, p *plan,
 	job.Received, job.Connections = received, connections
 	job.FinalPath = ""
 	run.base, run.started = received, time.Now()
+	run.ranges = nil
 	return q.saveLocked()
 }
 
@@ -325,6 +326,9 @@ func (q *Queue) downloadRanges(ctx context.Context, run *attempt, job *record, f
 	for _, r := range p.Ranges {
 		ranges = append(ranges, &liveRange{byteRange: r})
 	}
+	q.mu.Lock()
+	run.ranges = ranges
+	q.mu.Unlock()
 	checkpoint := func() error {
 		q.mu.Lock()
 		defer q.mu.Unlock()
@@ -403,6 +407,7 @@ func (q *Queue) downloadRanges(ctx context.Context, run *attempt, job *record, f
 					assigned = &liveRange{byteRange: byteRange{mid, mid, largest.End}}
 					largest.End = mid - 1
 					ranges = append(ranges, assigned)
+					run.ranges = ranges
 				}
 			}
 			if assigned == nil {

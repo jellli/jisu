@@ -62,6 +62,7 @@ type attempt struct {
 	cancel  context.CancelFunc
 	started time.Time
 	base    int64
+	ranges  []*liveRange // guarded by Queue.mu
 }
 
 type Queue struct {
@@ -125,6 +126,10 @@ func (q *Queue) Close() {
 func (q *Queue) State() Snapshot {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	return q.stateLocked()
+}
+
+func (q *Queue) stateLocked() Snapshot {
 	state := Snapshot{Jobs: make([]Job, 0, len(q.config.Jobs)), DownloadDirectory: q.config.Directory, Concurrency: q.config.Concurrency, Connections: q.config.Connections}
 	for _, job := range q.config.Jobs {
 		view := job.Job
