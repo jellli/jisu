@@ -21,6 +21,7 @@
   const urlInput = byId("download-url");
   const addButton = byId("add-download");
   const downloadError = byId("download-error");
+  const downloadDialog = byId("download-dialog");
   const settingsButton = byId("open-settings");
   const settingsDialog = byId("settings-dialog");
   const directoryButton = byId("choose-directory");
@@ -62,7 +63,8 @@
     document.body.classList.add("fallback-modal");
     dialog.setAttribute("open", "");
     dialog.setAttribute("aria-modal", "true");
-    dialog.querySelector("[autofocus], button").focus();
+    dialog.querySelector("[autofocus]")?.focus();
+    if (!dialog.contains(document.activeElement)) dialog.querySelector("button, input, select").focus();
     document.querySelector(".app-shell").setAttribute("aria-hidden", "true");
   }
 
@@ -195,6 +197,10 @@
     setText(row.speed, active ? `${bytes(job.bytesPerSecond)}/s` : "—");
     const connections = Math.floor(nonnegative(job.connections));
     setText(row.connections, active ? `${connections} 个连接` : "");
+    row.connections.classList.toggle("segmented", active && connections > 1);
+    if (active && connections > 1) setText(row.connections, `${connections} 路分段传输`);
+    const extension = name.split(".").pop().toLowerCase();
+    setAttribute(row.node, "data-kind", /^(mp4|mov|mkv)$/.test(extension) ? "video" : /^(zip|gz|dmg|iso|exe)$/.test(extension) ? "archive" : /^(pdf|epub)$/.test(extension) ? "document" : "file");
 
     row.primary.hidden = !action;
     if (action) {
@@ -247,11 +253,12 @@
 
     setText(byId("tasks-title"), labels[filter]);
     setText(byId("tasks-count"), `${jobs.length} 项`);
+    byId("queue-note").hidden = filter !== "queued";
     byId("task-columns").hidden = jobs.length === 0;
     taskList.hidden = jobs.length === 0;
     byId("empty-state").hidden = jobs.length !== 0;
     setText(byId("empty-title"), filter === "all" ? "还没有下载任务" : "此视图中没有任务");
-    setText(byId("empty-description"), filter === "all" ? "在上方粘贴 HTTP 或 HTTPS 链接开始下载。" : "可从侧栏切换视图查看其他任务。");
+    setText(byId("empty-description"), filter === "all" ? "点击「新建下载」，粘贴链接即可开始。" : "可从侧栏切换视图查看其他任务。");
     if (returnFocus) byId("tasks-title").focus();
   }
 
@@ -259,6 +266,7 @@
     const directory = snapshot.downloadDirectory || "未设置";
     setText(byId("settings-directory"), directory);
     setText(byId("sidebar-directory"), directory);
+    setText(byId("download-directory"), directory);
     byId("sidebar-directory").title = directory;
     if (!setting) concurrency.value = String(snapshot.concurrency);
   }
@@ -351,9 +359,10 @@
     try {
       await bridge.add(url);
       if (urlInput.value === entry) urlInput.value = "";
+      closeDialog(downloadDialog);
       selectFilter("all");
       notify("已添加下载任务");
-      if (document.activeElement === document.body) urlInput.focus();
+      byId("open-download").focus();
     } catch (error) {
       inlineMessage(downloadError, errorMessage("无法添加下载", error));
     } finally {
@@ -361,6 +370,17 @@
       addButton.disabled = false;
     }
   });
+  function openDownload() {
+    inlineMessage(downloadError, "");
+    urlInput.removeAttribute("aria-invalid");
+    openDialog(downloadDialog);
+    urlInput.focus();
+  }
+  byId("open-download").addEventListener("click", openDownload);
+  byId("close-download").addEventListener("click", () => closeDialog(downloadDialog));
+  byId("cancel-download").addEventListener("click", () => closeDialog(downloadDialog));
+  const shortcut = byId("open-download").querySelector("kbd");
+  shortcut.textContent = /Mac/.test(navigator.platform) ? "⌘ N" : "Ctrl N";
   settingsButton.addEventListener("click", () => {
     if (!setting) inlineMessage(settingError, "");
     openDialog(settingsDialog);
@@ -395,13 +415,19 @@
     });
   }
   window.addEventListener("keydown", (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "n") {
+      if (!document.querySelector("dialog[open]")) {
+        event.preventDefault();
+        openDownload();
+      }
+    }
     if (!fallbackDialog) return;
     const { dialog } = fallbackDialog;
     if (event.key === "Escape") {
       event.preventDefault();
       closeDialog(dialog);
     } else if (event.key === "Tab") {
-      const controls = [...dialog.querySelectorAll("button:not(:disabled), select:not(:disabled)")];
+      const controls = [...dialog.querySelectorAll("button:not(:disabled), input:not(:disabled), select:not(:disabled)")];
       const first = controls[0];
       const last = controls[controls.length - 1];
       const active = document.activeElement;

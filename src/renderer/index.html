@@ -7,6 +7,7 @@
     <title>极速 · 下载管理器</title>
     <link rel="stylesheet" href="styles.css">
     <script src="bridge.js" defer></script>
+    <script src="preview.js" defer></script>
     <script src="app.js" defer></script>
   </head>
   <body>
@@ -75,11 +76,11 @@
       <aside class="sidebar">
         <div class="brand">
           <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#icon-brand"></use></svg></span>
-          <div class="brand-copy"><strong>极速</strong><span>Jisu 下载管理器</span></div>
+          <div class="brand-copy"><strong>jisu<span class="brand-dot">.</span></strong><span>轻一点，快一点。</span></div>
         </div>
 
         <nav class="filters" aria-labelledby="filters-label">
-          <h2 id="filters-label" class="sidebar-label">任务视图</h2>
+          <h2 id="filters-label" class="sidebar-label">资料库</h2>
           <button class="filter" type="button" data-filter="all" aria-pressed="true" aria-label="全部任务" title="全部任务">
             <svg class="icon" aria-hidden="true"><use href="#icon-grid"></use></svg><span class="filter-label">全部任务</span><span class="filter-count" aria-hidden="true">0</span>
           </button>
@@ -104,42 +105,29 @@
           <svg class="icon" aria-hidden="true"><use href="#icon-folder"></use></svg>
           <div><span>默认保存位置</span><strong id="sidebar-directory">—</strong></div>
         </div>
+        <div class="sidebar-footnote">极速 · 为每一次下载减负</div>
       </aside>
 
       <main class="workspace">
         <header class="workspace-header">
           <div>
-            <h1>下载中心</h1>
-            <p>添加链接，跟踪并管理文件下载。</p>
+            <div class="eyebrow">你的文件，井然有序</div>
+            <h1>下载中心<span class="heading-dot">.</span></h1>
           </div>
-          <button id="open-settings" class="button button-secondary" type="button" aria-haspopup="dialog" disabled>
+          <div class="header-actions">
+          <button id="open-download" class="button button-primary" type="button" aria-haspopup="dialog">
+            <svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg>新建下载 <kbd>⌘ N</kbd>
+          </button>
+          <button id="open-settings" class="icon-button settings-button" type="button" aria-label="下载设置" aria-haspopup="dialog" disabled>
             <svg class="icon" aria-hidden="true"><use href="#icon-settings"></use></svg>设置
           </button>
-        </header>
-
-        <section class="panel composer" aria-labelledby="composer-title">
-          <div class="composer-heading">
-            <h2 id="composer-title">新建下载</h2><span class="protocol">HTTP / HTTPS</span>
           </div>
-          <form id="download-form" novalidate>
-            <div class="composer-fields">
-              <label class="url-field">
-                <svg class="icon" aria-hidden="true"><use href="#icon-link"></use></svg>
-                <span class="sr-only">下载链接</span>
-                <input id="download-url" aria-describedby="download-error" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="粘贴文件下载链接">
-              </label>
-              <button id="add-download" class="button button-primary" type="submit" disabled>
-                <svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg>添加下载
-              </button>
-            </div>
-            <p class="inline-error" id="download-error" role="alert" hidden></p>
-          </form>
-        </section>
+        </header>
 
         <section class="metrics" aria-label="下载概况">
           <div class="panel metric">
             <span class="metric-icon speed-icon"><svg class="icon" aria-hidden="true"><use href="#icon-speed"></use></svg></span>
-            <div><span class="metric-label">实时下载速度</span><strong id="metric-speed">0 B/s</strong></div>
+            <div><span class="metric-label">总下载速度</span><strong id="metric-speed">0 B/s</strong></div>
           </div>
           <div class="panel metric">
             <span class="metric-icon active-icon"><svg class="icon" aria-hidden="true"><use href="#icon-download"></use></svg></span>
@@ -154,7 +142,9 @@
         <section class="panel tasks" aria-labelledby="tasks-title">
           <header class="tasks-heading">
             <h2 id="tasks-title" tabindex="-1">全部任务</h2><span id="tasks-count" class="task-count">0 项</span>
+            <span class="list-hint">文件保存在本地，随时继续。</span>
           </header>
+          <p id="queue-note" class="queue-note" hidden><svg class="icon" aria-hidden="true"><use href="#icon-clock"></use></svg>不必等待。空出下载位置后，排队任务会自动开始。</p>
           <div id="task-columns" class="task-columns task-grid" aria-hidden="true" hidden>
             <span>文件</span><span>状态与进度</span><span>速度与连接</span><span>操作</span>
           </div>
@@ -165,7 +155,7 @@
             <p id="empty-description"></p>
           </div>
         </section>
-
+        <footer class="workspace-footer"><span><i class="status-dot"></i> 准备好接收下一个文件</span><span id="preview-label" hidden>设计预览 · 示例任务</span><span>HTTP / HTTPS</span></footer>
         <p class="notice" id="notice" role="status" aria-atomic="true"></p>
       </main>
     </div>
@@ -198,6 +188,26 @@
         </div>
       </li>
     </template>
+
+    <dialog id="download-dialog" aria-labelledby="composer-title" aria-describedby="composer-description">
+      <header class="dialog-header">
+        <div class="dialog-icon"><svg class="icon" aria-hidden="true"><use href="#icon-link"></use></svg></div>
+        <button id="close-download" class="icon-button" type="button" aria-label="关闭新建下载"><svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg></button>
+      </header>
+      <h2 id="composer-title">把链接交给 jisu。</h2>
+      <p id="composer-description" class="dialog-description">粘贴直链，其余的交给我们。</p>
+      <form id="download-form" novalidate>
+        <label class="field-label" for="download-url">下载链接</label>
+        <label class="url-field">
+          <svg class="icon" aria-hidden="true"><use href="#icon-link"></use></svg>
+          <input id="download-url" aria-describedby="download-error" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://example.com/file.zip" autofocus>
+        </label>
+        <p class="inline-error" id="download-error" role="alert" hidden></p>
+        <div class="download-destination"><svg class="icon" aria-hidden="true"><use href="#icon-folder"></use></svg><div><span>保存至</span><strong id="download-directory">—</strong></div><span class="destination-note">可在设置中更改</span></div>
+        <p class="download-tip"><svg class="icon" aria-hidden="true"><use href="#icon-speed"></use></svg>支持时自动启用多连接下载，暂停后可继续。</p>
+        <div class="dialog-actions"><button id="cancel-download" class="button button-secondary" type="button">取消</button><button id="add-download" class="button button-primary" type="submit" disabled>开始下载<svg class="icon" aria-hidden="true"><use href="#icon-download"></use></svg></button></div>
+      </form>
+    </dialog>
 
     <dialog id="settings-dialog" role="dialog" aria-labelledby="settings-title">
       <header class="dialog-header">
