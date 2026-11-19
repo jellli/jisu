@@ -172,7 +172,7 @@ func (q *Queue) transfer(ctx context.Context, run *attempt, job *record) error {
 	} else if len(previous.Ranges) > 0 {
 		p.Ranges = append([]byteRange(nil), previous.Ranges...)
 	} else if previous.Parts > 0 {
-		if err := migrateParts(dir, assembly, previous, p); err != nil {
+		if err := migrateParts(ctx, dir, assembly, previous, p); err != nil {
 			return err
 		}
 	}
@@ -206,29 +206,52 @@ func (q *Queue) transfer(ctx context.Context, run *attempt, job *record) error {
 	return q.complete(ctx, job, "", assembly)
 }
 
-func migrateParts(dir, assembly string, previous, p *plan) (err error) {
+func migrateParts(ctx context.Context, dir, assembly string, previous, p *plan) (err error) {
 	f, err := os.OpenFile(assembly, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}
 	defer func() { err = errors.Join(err, f.Close()) }()
 	for i := 0; i < previous.Parts; i++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		span := previous.segment(i)
 		r := byteRange{span.start, span.start, span.end}
-		data, e := os.ReadFile(partPath(dir, i))
+		src, e := os.Open(partPath(dir, i))
 		if e != nil && !errors.Is(e, os.ErrNotExist) {
 			return e
 		}
-		if int64(len(data)) <= span.end-span.start+1 {
-			n, e := f.WriteAt(data, span.start)
-			if e != nil {
-				return e
+		if e == nil {
+			info, statErr := src.Stat()
+			var copyErr error
+			if statErr == nil && info.Size() <= span.end-span.start+1 {
+				n, err := io.Copy(io.NewOffsetWriter(f, span.start), checkedReader{ctx, src})
+				r.Next += n
+				copyErr = err
 			}
-			r.Next += int64(n)
+			if err := errors.Join(statErr, copyErr, src.Close()); err != nil {
+				return err
+			}
 		}
 		p.Ranges = append(p.Ranges, r)
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return f.Sync()
+}
+
+type checkedReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (r checkedReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.r.Read(p)
 }
 
 func (q *Queue) streamFull(ctx context.Context, run *attempt, job *record, dir, assembly string) error {

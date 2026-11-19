@@ -2,8 +2,11 @@ package download
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +18,32 @@ import (
 )
 
 const prefixSize = 64 << 10
+
+type cancelingReader struct {
+	cancel context.CancelFunc
+}
+
+func (r cancelingReader) Read(p []byte) (int, error) {
+	r.cancel()
+	p[0] = 'a'
+	return 1, nil
+}
+
+func TestMigrationCopyCancellation(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var dst bytes.Buffer
+	n, err := io.Copy(&dst, checkedReader{ctx, cancelingReader{cancel}})
+	if n != 1 || !errors.Is(err, context.Canceled) {
+		t.Fatalf("copy did not stop between reads: n=%d err=%v", n, err)
+	}
+	dir := t.TempDir()
+	err = migrateParts(ctx, dir, filepath.Join(dir, "assembled"), &plan{Parts: 4, Size: 1024}, &plan{})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("migration ignored cancellation: %v", err)
+	}
+}
 
 func TestLiveConnections(t *testing.T) {
 	t.Parallel()
