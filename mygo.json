@@ -1,0 +1,20 @@
+{
+  "name": "jisu",
+  "slug": "jisu",
+  "identifier": "com.jellli.jisu",
+  "version": "0.1.0",
+  "copyright": "Copyright © 2026 jellli",
+  "publisher": "jellli",
+  "icon": "resources/icon.png",
+  "out": "build",
+  "linux": {
+    "comment": "Download manager",
+    "categories": [
+      "Network",
+      "FileTransfer"
+    ]
+  },
+  "windows": {
+    "installerInclude": "packaging/windows/installer.nsh"
+  }
+}

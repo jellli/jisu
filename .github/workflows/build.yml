@@ -1,0 +1,152 @@
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to a pull request cancels its older runs; main and tags
+# always finish.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test:
+    name: Test (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Linux, os: ubuntu-latest }
+          - { name: Windows, os: windows-latest }
+          - { name: macOS, os: macos-latest }
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go build .
+      - run: go test ./...
+
+  package:
+    name: Package (${{ matrix.name }})
+    needs: test
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # On Windows, mygo build downloads NSIS (checked against its
+          # SHA-256) for the installer.
+          - name: Windows x64
+            os: windows-latest
+            platform: windows/amd64
+            artifact: jisu-windows-x64
+            installers: windows-amd64/{slug}-setup-{version}-amd64.exe
+          # Disk images need hdiutil, so macOS builds on macOS. The arm64
+          # runner builds both architectures, one disk image each.
+          - name: macOS
+            os: macos-latest
+            platform: darwin/arm64,darwin/amd64
+            artifact: jisu-macos
+            installers: darwin-arm64/{slug}-{version}-arm64.dmg darwin-amd64/{slug}-{version}-amd64.dmg
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Check the tag against mygo.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(jq -r .version mygo.json)
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match mygo.json version $version"
+            exit 1
+          fi
+      - name: Fetch the WebView2 bootstrapper
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $out = "packaging/windows/MicrosoftEdgeWebview2Setup.exe"
+          Invoke-WebRequest -UseBasicParsing -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile $out
+          $sig = Get-AuthenticodeSignature $out
+          if ($sig.Status -ne "Valid" -or $sig.SignerCertificate.Subject -notmatch "O=Microsoft Corporation") {
+            throw "WebView2 bootstrapper signature: $($sig.Status) $($sig.SignerCertificate.Subject)"
+          }
+      - name: Build
+        run: go tool mygo build -platform "${{ matrix.platform }}"
+      - name: Collect the installers
+        env:
+          INSTALLERS: ${{ matrix.installers }}
+        run: |
+          slug=$(jq -r .slug mygo.json)
+          version=$(jq -r .version mygo.json)
+          out=$(jq -r '.out // "build"' mygo.json)
+          mkdir -p upload
+          for f in $INSTALLERS; do
+            f=${f//\{slug\}/$slug}
+            f=${f//\{version\}/$version}
+            if [ ! -f "$out/$f" ]; then
+              echo "::error::missing installer $out/$f"
+              ls -R "$out"
+              exit 1
+            fi
+            cp "$out/$f" upload/
+          done
+          ls -l upload
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: upload/
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: jisu-*
+          path: dist
+          merge-multiple: true
+      - name: Check every platform's installer is there
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          for f in "jisu-setup-$version-amd64.exe" "jisu-$version-arm64.dmg" "jisu-$version-amd64.dmg"; do
+            [ -f "dist/$f" ] || { echo "::error::missing dist/$f"; ls -l dist; exit 1; }
+          done
+          (cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "jisu $GITHUB_REF_NAME" \
+            --generate-notes \
+            --notes "Choose arm64 for Apple Silicon, amd64 for Intel Macs, or the x64 setup executable for Windows. This preview is not notarized on macOS or code-signed on Windows. See the [installation notes](https://github.com/jellli/jisu#install) if macOS or SmartScreen warns about the installer."
