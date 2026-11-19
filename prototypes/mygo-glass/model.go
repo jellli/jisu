@@ -21,6 +21,10 @@ type transfer struct {
 	state             transferState
 	segments          [8]float64
 	failure           string
+	previewCount      int
+	events            []string
+	history           []float64
+	scheme            string
 }
 
 // Fixtures and per-connection rates match PR #4's resetTasks(), baseSegments,
