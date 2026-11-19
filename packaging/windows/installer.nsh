@@ -33,8 +33,14 @@
     !if /FileExists "${JISU_WEBVIEW2_SETUP}"
       File "/oname=$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe" "${JISU_WEBVIEW2_SETUP}"
     !else
-      nsExec::ExecToLog 'powershell.exe -NoProfile -NonInteractive -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri ''${JISU_WEBVIEW2_URL}'' -OutFile ''$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe''; $$sig = Get-AuthenticodeSignature ''$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe''; if ($$sig.Status -ne ''Valid'' -or $$sig.SignerCertificate.Subject -notmatch ''O=Microsoft Corporation'') { exit 1 }"'
-      Pop $1
+      System::Call 'Kernel32::SetEnvironmentVariableW(w "JISU_WEBVIEW2_BOOTSTRAPPER", w "$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe") i .r1'
+      ${If} $1 != 0
+        nsExec::ExecToLog `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -Command "$$ErrorActionPreference = 'Stop'; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $$out = $$env:JISU_WEBVIEW2_BOOTSTRAPPER; Invoke-WebRequest -UseBasicParsing -Uri '${JISU_WEBVIEW2_URL}' -OutFile $$out; $$sig = Get-AuthenticodeSignature -LiteralPath $$out; if ($$sig.Status -ne 'Valid' -or $$sig.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') { exit 1 }"`
+        Pop $1
+        System::Call 'Kernel32::SetEnvironmentVariableW(w "JISU_WEBVIEW2_BOOTSTRAPPER", p 0)'
+      ${Else}
+        StrCpy $1 "error"
+      ${EndIf}
       ${If} $1 != "0"
         Delete "$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe"
       ${EndIf}
