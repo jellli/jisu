@@ -25,13 +25,28 @@ though this window uses no webview, and an OpenGL-capable display. On Ubuntu:
 sudo apt-get install libwebkit2gtk-4.1-0 fonts-noto-cjk
 ```
 
-The default is a frozen comparison. Check **模拟传输** to advance the mock
-transfers; pause/resume any incomplete task, expand **连接详情** to see all
-eight connection rates, reset to the original fixtures, or switch appearance.
+The default is a frozen comparison. Open **演示设置** in the footer to enable
+**模拟传输**, change appearance, reset samples, or inject a first-row state.
+These demonstration controls stay out of the queue's main visual hierarchy.
+
+- **暂停 / 继续:** stop or resume incomplete ranges without losing bytes.
+- **重试:** resume a timed-out transfer from retained data, not from zero.
+- **在文件夹中显示:** show the mock file's path inline. It never opens a real
+  folder or file; the prototype has no downloaded files.
+- **Select a row / details chevron:** a single inspector below the queue follows
+  the selected visible task. Its eight adjacent byte ranges form one track over
+  an aligned connection / received bytes / rate / state table. Completed files
+  show their source and saved path instead of eight redundant 100% readings.
+  Filtering moves selection to a visible task; an empty result hides the inspector.
+- **Filters:** live counts for all, in progress, paused, needs attention, and
+  completed. In progress includes interrupted active transfers so a failure
+  does not disappear from the queue. Needs attention isolates the retry action.
+
 All controls support keyboard focus; icon buttons have accessible names and
-tooltips. The progress bars expose their connection values to assistive
+tooltips. The adjacent progress ranges expose their values to assistive
 technology. Glass follows MyGo's Reduce Transparency and Increase Contrast
-support. No perpetual animation runs while the simulation is off.
+support. No perpetual animation runs while the simulation is off, and enabling
+simulation never catches up time spent frozen.
 
 ## Comparison data
 
@@ -46,25 +61,39 @@ Fixtures are copied from [PR #4](https://github.com/jellli/jisu/pull/4),
 
 Rates are `[0, 2.8, 2.3, 3.2, 2.7, 2.1, 2.5, 2.8]` MB/s, zero for inactive
 or complete connections; the same 2.4 MB/s fallback applies to connection 1
-if it is ever incomplete. Sizes, percentages, and ETA use the same decimal
-units and rounding. Initial totals are **63%, 18.4 MB/s**, **51%**, **100%**.
+if it is ever incomplete. Initial totals remain **63%, 18.4 MB/s**, **51%**,
+**100%**. ETA intentionally corrects the original web study: fixed independent
+rates mean the *slowest remaining range* determines completion, not remaining
+file bytes divided by aggregate speed. The Ubuntu fixture needs about 212
+seconds, displayed conservatively as **约 4 分钟**, without false precision.
 
 ## Design choices
 
 - **Product:** a desktop download manager for monitoring parallel transfers.
 - **Character:** precise, quiet, dependable.
 - **World:** a file list, not a dashboard or promotional landing page.
-- **Moment:** eight numbered byte-range tracks, green only for active work.
-- **Restraint:** a single glass toolbar; opaque transfer rows keep contrast.
+- **Moment:** one continuous eight-range track, green only for active work.
+- **Restraint:** no glass toolbar; glass is confined to labeled row actions.
 
-The earlier web directions were already restrained after their unslop pass.
-This is a native material/layout comparison, not a new visual brand: preserve
-their line icons, calm hierarchy, metadata, and numbered lanes. Avoid nested
-cards, ornamental extension tiles, giant percentage counters, all-over glass,
-and animations on transfer statistics. Row actions stay visible. Details
-expand immediately rather than making a frequent utility action wait.
+The revised row follows both native-design critiques and Kite's queue/inspector
+structure, not Kite's faux-macOS skin. Each task stays in a fixed 64px row with
+overall progress; its detailed eight-range track lives in the shared bottom pane.
+The queue and inspector scroll independently at the 720×500 minimum size. Quiet
+completed rows with a file action, and failure context beside retained bytes
+and retry replace oversized cards. The error demo identifies connection 03 as timed out; details
+distinguish it from completed and waiting ranges. The original three fixtures
+are preserved; failure is an opt-in scenario, not a fourth invented download.
 
-The toolbar and round action buttons use the official `glass.Glass` material.
+Filename, percentage and rounded ETA share the same group. Source, received bytes
+and per-connection data move into details. Completed rows have no bar,
+repeated percentage or zero-speed display. Paused rows report no zero speed.
+Use one green for active work and semantic red only for errors. Small text
+uses contrast of at least 4.5:1 against the chosen light/dark surfaces.
+Details and keyboard actions respond immediately; transfer statistics do not
+animate decoratively. No third-party Lobe dependency is introduced: only its
+useful behavior is ported using MyGo's own widgets.
+
+The labeled row action buttons use the official `glass.Glass` material.
 This is MyGo's cross-platform shader, **not** AppKit's `NSGlassEffectView`:
 `Native: true` is specifically for glass over a webview on macOS, which this
 prototype does not have. Windows, Linux, and macOS use the same material code.
