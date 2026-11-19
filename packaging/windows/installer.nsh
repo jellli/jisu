@@ -33,8 +33,11 @@
     !if /FileExists "${JISU_WEBVIEW2_SETUP}"
       File "/oname=$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe" "${JISU_WEBVIEW2_SETUP}"
     !else
-      nsExec::ExecToLog 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri ''${JISU_WEBVIEW2_URL}'' -OutFile ''$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe''"'
+      nsExec::ExecToLog 'powershell.exe -NoProfile -NonInteractive -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri ''${JISU_WEBVIEW2_URL}'' -OutFile ''$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe''; $$sig = Get-AuthenticodeSignature ''$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe''; if ($$sig.Status -ne ''Valid'' -or $$sig.SignerCertificate.Subject -notmatch ''O=Microsoft Corporation'') { exit 1 }"'
       Pop $1
+      ${If} $1 != "0"
+        Delete "$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe"
+      ${EndIf}
     !endif
     StrCpy $1 "missing"
     ${If} ${FileExists} "$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe"

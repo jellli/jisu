@@ -149,4 +149,4 @@ jobs:
             --verify-tag \
             --title "jisu $GITHUB_REF_NAME" \
             --generate-notes \
-            --notes "Unsigned build. macOS: the app is signed ad hoc, so Gatekeeper blocks the first launch; right-click the app and choose Open, or run \`xattr -dr com.apple.quarantine /Applications/jisu.app\`. Windows: SmartScreen warns about the unsigned installer; choose More info > Run anyway."
+            --notes "Choose arm64 for Apple Silicon, amd64 for Intel Macs, or the x64 setup executable for Windows. This preview is not notarized on macOS or code-signed on Windows. See the [installation notes](https://github.com/jellli/jisu#install) if macOS or SmartScreen warns about the installer."
