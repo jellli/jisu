@@ -18,7 +18,7 @@ Then open `http://localhost:4173/download-row.html`.
 | Mosaic | Persistent eight-connection piece map and per-connection rates | Diagnosing uneven parallel transfers | Taller rows, more information to parse |
 | Focus | Outcome-first progress with progressive disclosure | Checking completion and time remaining | Segment differences are hidden until expanded |
 
-All three share the same realistic tasks and the original renderer's gray/green tokens. Light mode is fixed to keep the comparison about information structure, not theme. The picker follows the plugin's `PICKER.md` specification without product-specific styling.
+All three share the same realistic tasks and the original renderer's gray/green tokens. Light mode is fixed to keep the comparison about information structure, not theme. The picker follows the plugin's `PICKER.md` specification without product-specific styling. Its CSS and reference wiring are copied verbatim; a strict query validator and Shift-key guard surround that wiring to honor the behavior contract where the reference's `parseInt` and modifier checks are more permissive.
 
 ## Try it
 

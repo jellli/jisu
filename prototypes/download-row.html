@@ -374,9 +374,49 @@
       resetTasks();
       const d = directions[n];
       const row = [rail, mosaic, focus][n];
-      return `<div class="frame ${d.className}"><header class="intro"><div><div class="eyebrow">${d.number} <span aria-hidden="true">/</span> ${d.name.toUpperCase()}</div><h1>${d.title}</h1><p>${d.description}</p></div><div class="keys"><div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 切换方案</div><div style="margin-top:7px"><kbd>←</kbd><kbd>→</kbd> 对比 <span aria-hidden="true">·</span> <kbd>R</kbd> 重置</div></div></header><section class="window" aria-label="Jisu 下载中心原型"><div class="titlebar"><div class="wordmark">${icon('download')} 极速 <span style="color:var(--muted);font-weight:400">/ Jisu</span></div><span>多线程下载，让等待少一点</span></div><div class="app"><aside class="sidebar" aria-label="界面上下文（静态）"><p class="sidebar-label">下载管理</p><div class="nav-line current"><span>全部任务</span><span>3</span></div><div class="nav-line"><span>下载中</span><span data-count="downloading">1</span></div><div class="nav-line"><span>已暂停</span><span data-count="paused">1</span></div><div class="nav-line"><span>已完成</span><span data-count="completed">1</span></div><div class="save-location">默认保存位置<br>~/Downloads<br><br>界面上下文 · 非功能导航</div></aside><div class="workspace"><div class="list-header"><div><h2>全部下载</h2><p>3 个任务 <span aria-hidden="true">·</span> 8 路并行连接</p></div><div class="total-speed"><strong class="stat" data-total-speed>18.4 <span style="font-size:11px;letter-spacing:0">MB/s</span></strong>总下载速度</div></div><div class="list">${tasks.map(row).join('')}</div><footer class="footer"><span>HTTP Range · 可恢复传输</span><span>模拟数据，不连接下载引擎</span></footer></div></div></section><footer class="rationale"><span><strong>${d.name}</strong> — ${d.strength}</span><span>取舍：${d.cost}</span></footer></div>`;
+      const count = state => tasks.filter(task => task.state === state).length;
+      const total = tasks.reduce((sum, task) => sum + speed(task), 0).toFixed(1);
+      return `<div class="frame ${d.className}">
+        <header class="intro">
+          <div><div class="eyebrow">${d.number} <span aria-hidden="true">/</span> ${d.name.toUpperCase()}</div><h1>${d.title}</h1><p>${d.description}</p></div>
+          <div class="keys"><div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 切换方案</div><div style="margin-top:7px"><kbd>←</kbd><kbd>→</kbd> 对比 <span aria-hidden="true">·</span> <kbd>R</kbd> 重置</div></div>
+        </header>
+        <section class="window" aria-label="Jisu 下载中心原型">
+          <div class="titlebar"><div class="wordmark">${icon('download')} 极速 <span style="color:var(--muted);font-weight:400">/ Jisu</span></div><span>多线程下载，让等待少一点</span></div>
+          <div class="app">
+            <aside class="sidebar" aria-label="界面上下文（静态）">
+              <p class="sidebar-label">下载管理</p>
+              <div class="nav-line current"><span>全部任务</span><span>${tasks.length}</span></div>
+              <div class="nav-line"><span>下载中</span><span data-count="downloading">${count('downloading')}</span></div>
+              <div class="nav-line"><span>已暂停</span><span data-count="paused">${count('paused')}</span></div>
+              <div class="nav-line"><span>已完成</span><span data-count="completed">${count('completed')}</span></div>
+              <div class="save-location">默认保存位置<br>~/Downloads<br><br>界面上下文 · 非功能导航</div>
+            </aside>
+            <div class="workspace">
+              <div class="list-header">
+                <div><h2>全部下载</h2><p>${tasks.length} 个任务 <span aria-hidden="true">·</span> 8 路并行连接</p></div>
+                <div class="total-speed"><strong class="stat" data-total-speed>${total} <span style="font-size:11px;letter-spacing:0">MB/s</span></strong>总下载速度</div>
+              </div>
+              <div class="list">${tasks.map(row).join('')}</div>
+              <footer class="footer"><span>HTTP Range · 可恢复传输</span><span>模拟数据，不连接下载引擎</span></footer>
+            </div>
+          </div>
+        </section>
+        <footer class="rationale"><span><strong>${d.name}</strong> — ${d.strength}</span><span>取舍：${d.cost}</span></footer>
+      </div>`;
     }
     const variants = [() => renderVariant(0), () => renderVariant(1), () => renderVariant(2)];
+
+    // Validate around the verbatim picker reference to meet its stricter contract.
+    const initialUrl = new URL(location);
+    const initialVariant = initialUrl.searchParams.get('v');
+    if (initialVariant !== null && (!/^[1-9]\d*$/.test(initialVariant) || Number(initialVariant) > variants.length)) {
+      initialUrl.searchParams.delete('v');
+      history.replaceState(null, '', initialUrl);
+    }
+    document.addEventListener('keydown', event => {
+      if (event.shiftKey && /^(?:[1-9]|ArrowLeft|ArrowRight|r|R)$/.test(event.key)) event.stopImmediatePropagation();
+    }, true);
 
     // `variants` is an array of render functions, one per variant, in picker order.
     const stage = document.getElementById('stage');
