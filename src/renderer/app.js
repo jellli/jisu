@@ -21,6 +21,7 @@
   const urlInput = byId("download-url");
   const addButton = byId("add-download");
   const downloadError = byId("download-error");
+  const downloadDialog = byId("download-dialog");
   const settingsButton = byId("open-settings");
   const settingsDialog = byId("settings-dialog");
   const directoryButton = byId("choose-directory");
@@ -62,7 +63,7 @@
     document.body.classList.add("fallback-modal");
     dialog.setAttribute("open", "");
     dialog.setAttribute("aria-modal", "true");
-    dialog.querySelector("[autofocus], button").focus();
+    (dialog.querySelector("[autofocus]") || dialog.querySelector("button, input, select")).focus();
     document.querySelector(".app-shell").setAttribute("aria-hidden", "true");
   }
 
@@ -146,6 +147,7 @@
       size: find("task-size"),
       speed: find("task-speed"),
       connections: find("task-connections"),
+      lanes: find("connection-lanes"),
       primary: find("task-primary"),
       remove: find("task-remove"),
     };
@@ -194,7 +196,10 @@
     }
     setText(row.speed, active ? `${bytes(job.bytesPerSecond)}/s` : "—");
     const connections = Math.floor(nonnegative(job.connections));
-    setText(row.connections, active ? `${connections} 个连接` : "");
+    setText(row.connections, active ? `${connections} 路并行连接` : "");
+    if (row.lanes.childElementCount !== (active ? connections : 0)) {
+      row.lanes.replaceChildren(...Array.from({ length: active ? connections : 0 }, () => document.createElement("i")));
+    }
 
     row.primary.hidden = !action;
     if (action) {
@@ -250,8 +255,9 @@
     byId("task-columns").hidden = jobs.length === 0;
     taskList.hidden = jobs.length === 0;
     byId("empty-state").hidden = jobs.length !== 0;
+    byId("queue-note").hidden = filter !== "queued";
     setText(byId("empty-title"), filter === "all" ? "还没有下载任务" : "此视图中没有任务");
-    setText(byId("empty-description"), filter === "all" ? "在上方粘贴 HTTP 或 HTTPS 链接开始下载。" : "可从侧栏切换视图查看其他任务。");
+    setText(byId("empty-description"), filter === "all" ? "点击「新建下载」，粘贴 HTTP 或 HTTPS 链接。" : "可从侧栏切换视图查看其他任务。");
     if (returnFocus) byId("tasks-title").focus();
   }
 
@@ -259,6 +265,7 @@
     const directory = snapshot.downloadDirectory || "未设置";
     setText(byId("settings-directory"), directory);
     setText(byId("sidebar-directory"), directory);
+    setText(byId("download-directory"), directory);
     byId("sidebar-directory").title = directory;
     if (!setting) concurrency.value = String(snapshot.concurrency);
   }
@@ -267,17 +274,22 @@
     snapshot = { ...next, jobs: next.jobs || [] };
     const counts = { all: snapshot.jobs.length };
     let speed = 0;
+    let connections = 0;
     for (const job of snapshot.jobs) {
       if (!hasState(job.state)) continue;
       counts[job.state] = (counts[job.state] || 0) + 1;
       if (job.state === "downloading") speed += nonnegative(job.bytesPerSecond);
+      if (job.state === "downloading") connections += Math.floor(nonnegative(job.connections));
     }
     for (const button of filterButtons) {
       setText(button.querySelector(".filter-count"), String(counts[button.dataset.filter] || 0));
     }
     setText(byId("metric-speed"), `${bytes(speed)}/s`);
     setText(byId("metric-active"), String(counts.downloading || 0));
-    setText(byId("metric-completed"), String(counts.completed || 0));
+    setText(byId("metric-queued"), String(counts.queued || 0));
+    setText(byId("metric-connections"), String(connections));
+    setText(byId("metric-concurrency"), String(snapshot.concurrency));
+    setText(byId("footer-summary"), `${counts.downloading || 0} 项传输中 · ${counts.queued || 0} 项等待 · ${counts.completed || 0} 项已完成`);
     renderSettings();
     renderRemoval();
     renderJobs();
@@ -351,6 +363,7 @@
     try {
       await bridge.add(url);
       if (urlInput.value === entry) urlInput.value = "";
+      closeDialog(downloadDialog);
       selectFilter("all");
       notify("已添加下载任务");
       if (document.activeElement === document.body) urlInput.focus();
@@ -361,6 +374,9 @@
       addButton.disabled = false;
     }
   });
+  byId("open-download").addEventListener("click", () => openDialog(downloadDialog));
+  byId("close-download").addEventListener("click", () => closeDialog(downloadDialog));
+  byId("cancel-download").addEventListener("click", () => closeDialog(downloadDialog));
   settingsButton.addEventListener("click", () => {
     if (!setting) inlineMessage(settingError, "");
     openDialog(settingsDialog);
@@ -395,13 +411,18 @@
     });
   }
   window.addEventListener("keydown", (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k" && !document.querySelector("dialog[open]")) {
+      event.preventDefault();
+      openDialog(downloadDialog);
+      return;
+    }
     if (!fallbackDialog) return;
     const { dialog } = fallbackDialog;
     if (event.key === "Escape") {
       event.preventDefault();
       closeDialog(dialog);
     } else if (event.key === "Tab") {
-      const controls = [...dialog.querySelectorAll("button:not(:disabled), select:not(:disabled)")];
+      const controls = [...dialog.querySelectorAll("button:not(:disabled), select:not(:disabled), input:not(:disabled)")];
       const first = controls[0];
       const last = controls[controls.length - 1];
       const active = document.activeElement;
