@@ -25,6 +25,7 @@
   const settingsDialog = byId("settings-dialog");
   const directoryButton = byId("choose-directory");
   const settingError = byId("settings-error");
+  const connections = byId("connections");
   const concurrency = byId("concurrency");
   const filterButtons = [...document.querySelectorAll("[data-filter]")];
   const taskList = byId("task-list");
@@ -260,7 +261,7 @@
     setText(byId("settings-directory"), directory);
     setText(byId("sidebar-directory"), directory);
     byId("sidebar-directory").title = directory;
-    if (!setting) concurrency.value = String(snapshot.concurrency);
+    if (!setting) { concurrency.value = String(snapshot.concurrency); connections.value = String(snapshot.connections || 8); }
   }
 
   function renderState(next) {
@@ -314,6 +315,7 @@
     setting = true;
     directoryButton.disabled = true;
     concurrency.disabled = true;
+    connections.disabled = true;
     inlineMessage(settingError, "");
     try {
       await command();
@@ -323,6 +325,7 @@
       setting = false;
       directoryButton.disabled = false;
       concurrency.disabled = false;
+      connections.disabled = false;
       renderSettings();
     }
   }
@@ -370,6 +373,13 @@
     void settingCommand("无法更改保存位置", async () => {
       const chosen = await bridge.chooseDirectory();
       if (chosen) snapshot.downloadDirectory = chosen;
+    });
+  });
+  connections.addEventListener("change", () => {
+    const count = Number(connections.value);
+    void settingCommand("无法更改连接数", async () => {
+      await bridge.setConnections(count);
+      snapshot.connections = count;
     });
   });
   concurrency.addEventListener("change", () => {

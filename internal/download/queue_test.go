@@ -2,7 +2,11 @@ package download
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +19,155 @@ import (
 
 const prefixSize = 64 << 10
 
+type cancelingReader struct {
+	cancel context.CancelFunc
+}
+
+func (r cancelingReader) Read(p []byte) (int, error) {
+	r.cancel()
+	p[0] = 'a'
+	return 1, nil
+}
+
+func TestMigrationCopyCancellation(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var dst bytes.Buffer
+	n, err := io.Copy(&dst, checkedReader{ctx, cancelingReader{cancel}})
+	if n != 1 || !errors.Is(err, context.Canceled) {
+		t.Fatalf("copy did not stop between reads: n=%d err=%v", n, err)
+	}
+	dir := t.TempDir()
+	err = migrateParts(ctx, dir, filepath.Join(dir, "assembled"), &plan{Parts: 4, Size: 1024}, &plan{})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("migration ignored cancellation: %v", err)
+	}
+}
+
+func TestCheckpointBeforeRangeEOF(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("ETag", `"stable"`)
+		if r.Header.Get("Range") == "bytes=0-0" {
+			w.Header().Set("Content-Range", "bytes 0-0/4")
+			w.WriteHeader(http.StatusPartialContent)
+			fmt.Fprint(w, "a")
+			return
+		}
+		w.Header().Set("Content-Range", "bytes 0-3/4")
+		w.WriteHeader(http.StatusPartialContent)
+		fmt.Fprint(w, "abcd")
+		_ = http.NewResponseController(w).Flush()
+		<-r.Context().Done()
+	}))
+	t.Cleanup(server.Close)
+	q, state, _ := openTestQueue(t)
+	if err := q.Add(server.URL + "/pending.bin"); err != nil {
+		t.Fatal(err)
+	}
+	waitJob(t, q, 0, func(j Job) bool { return j.Received == 4 })
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		data, err := os.ReadFile(state)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var saved config
+		if err := json.Unmarshal(data, &saved); err != nil {
+			t.Fatal(err)
+		}
+		if p := saved.Jobs[0].Plan; p != nil && p.Ranges[0].Next == 3 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("checkpoint did not leave the unverified final byte resumable")
+}
+
+func TestLiveConnections(t *testing.T) {
+	t.Parallel()
+	fixture := newRangeFixture(t)
+	fixture.stall.Store(true)
+	q, _, _ := openTestQueue(t)
+	for _, n := range []int{-1, 0, 1, 7, 64} {
+		if err := q.SetConnections(n); err == nil {
+			t.Fatalf("accepted %d", n)
+		}
+	}
+	if q.State().Connections != 8 {
+		t.Fatal("wrong default")
+	}
+	if err := q.Add(fixture.URL + "/live.bin"); err != nil {
+		t.Fatal(err)
+	}
+	waitJob(t, q, 0, func(j Job) bool { return j.Connections == 8 && j.Received == 8*prefixSize })
+	if err := q.SetConnections(16); err != nil {
+		t.Fatal(err)
+	}
+	waitJob(t, q, 0, func(j Job) bool { return j.Connections == 16 && j.Received >= 16*prefixSize })
+	if err := q.SetConnections(4); err != nil {
+		t.Fatal(err)
+	}
+	job := waitJob(t, q, 0, func(j Job) bool { return j.Connections == 4 })
+	if err := q.Pause(job.ID); err != nil {
+		t.Fatal(err)
+	}
+	fixture.stall.Store(false)
+	starts := fixture.resetStarts()
+	// Added workers must take split ranges, not original eighth boundaries.
+	split := false
+	for start := range starts {
+		if start%int64(len(fixture.original)/8) != 0 {
+			split = true
+		}
+	}
+	if !split {
+		t.Fatalf("no dynamic split: %v", starts)
+	}
+	if err := q.Resume(job.ID); err != nil {
+		t.Fatal(err)
+	}
+	waitForState(t, q, 0, Completed)
+	assertOutput(t, q, job.ID, fixture.original)
+}
+
+func TestLegacyResume(t *testing.T) {
+	t.Parallel()
+	fixture := newRangeFixture(t)
+	dir := t.TempDir()
+	state := filepath.Join(t.TempDir(), "queue.json")
+	id := "0123456789abcdef0123456789abcdef"
+	partial := filepath.Join(dir, ".jisu-"+id)
+	if err := os.Mkdir(partial, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for i := range 4 {
+		start := i * len(fixture.original) / 4
+		if err := os.WriteFile(partPath(partial, i), fixture.original[start:start+prefixSize], 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	saved := fmt.Sprintf(`{"directory":%q,"concurrency":2,"jobs":[{"id":%q,"url":%q,"directory":%q,"state":"queued","plan":{"url":%q,"size":%d,"validator":"\"rev-1\"","parts":4}}]}`, dir, id, fixture.URL+"/legacy.bin", dir, fixture.URL+"/legacy.bin", len(fixture.original))
+	if err := os.WriteFile(state, []byte(saved), 0600); err != nil {
+		t.Fatal(err)
+	}
+	q, err := Open(state, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(q.Close)
+	waitForState(t, q, 0, Completed)
+	assertOutput(t, q, id, fixture.original)
+	starts := fixture.resetStarts()
+	for i := range 4 {
+		want := int64(i*len(fixture.original)/4 + prefixSize)
+		if !starts[want] {
+			t.Errorf("missing legacy resume at %d: %v", want, starts)
+		}
+	}
+}
+
 func TestResumeSegmentsAfterRestart(t *testing.T) {
 	t.Parallel()
 	fixture := newRangeFixture(t)
@@ -24,12 +177,23 @@ func TestResumeSegmentsAfterRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	job := waitJob(t, q, 0, func(j Job) bool {
-		return j.State == Downloading && j.Connections == 4 && j.Received == 4*prefixSize
+		return j.State == Downloading && j.Connections == 8 && j.Received == 8*prefixSize
 	})
 	q.Close() // Simulates exiting during a download without explicitly pausing it.
+	body, err := os.ReadFile(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved config
+	if err := json.Unmarshal(body, &saved); err != nil {
+		t.Fatal(err)
+	}
+	if len(saved.Jobs[0].Plan.Ranges) != 8 || saved.Jobs[0].Plan.Parts != 0 {
+		t.Fatal("not a range plan")
+	}
 	fixture.stall.Store(false)
 	fixture.resetStarts()
-	q, err := Open(state, dir)
+	q, err = Open(state, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,11 +204,53 @@ func TestResumeSegmentsAfterRestart(t *testing.T) {
 	}
 	assertOutput(t, q, complete.ID, fixture.original)
 	starts := fixture.resetStarts()
-	for i := range 4 {
-		want := int64(i*len(fixture.original)/4 + prefixSize)
+	for i := range 8 {
+		want := int64(i*len(fixture.original)/8 + prefixSize)
 		if !starts[want] {
 			t.Errorf("missing resumed range at %d; got %v", want, starts)
 		}
+	}
+}
+
+func TestResumeWithoutPartialData(t *testing.T) {
+	t.Parallel()
+	for _, missing := range []bool{true, false} {
+		t.Run(fmt.Sprintf("missing=%t", missing), func(t *testing.T) {
+			fixture := newRangeFixture(t)
+			fixture.stall.Store(true)
+			q, state, dir := openTestQueue(t)
+			if err := q.Add(fixture.URL + "/archive.bin"); err != nil {
+				t.Fatal(err)
+			}
+			job := waitJob(t, q, 0, func(j Job) bool { return j.Received == 8*prefixSize })
+			q.Close()
+			assembly := filepath.Join(dir, ".jisu-"+job.ID, "assembled")
+			var err error
+			if missing {
+				err = os.Remove(assembly)
+			} else {
+				err = os.Truncate(assembly, prefixSize)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			fixture.stall.Store(false)
+			fixture.resetStarts()
+			q, err = Open(state, dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(q.Close)
+			waitForState(t, q, 0, Completed)
+			assertOutput(t, q, job.ID, fixture.original)
+			starts := fixture.resetStarts()
+			for i := range 8 {
+				start := int64(i * len(fixture.original) / 8)
+				if !starts[start] {
+					t.Errorf("missing fresh range at %d: %v", start, starts)
+				}
+			}
+		})
 	}
 }
 
@@ -59,7 +265,7 @@ func TestQueuePauseAndChangedFile(t *testing.T) {
 	if err := q.Add(fixture.URL + "/first.bin"); err != nil {
 		t.Fatal(err)
 	}
-	first := waitJob(t, q, 0, func(j Job) bool { return j.Received == 4*prefixSize })
+	first := waitJob(t, q, 0, func(j Job) bool { return j.Received == 8*prefixSize })
 	if err := q.Add(fixture.URL + "/second.bin"); err != nil {
 		t.Fatal(err)
 	}
@@ -93,8 +299,8 @@ func TestQueuePauseAndChangedFile(t *testing.T) {
 	waitForState(t, q, 0, Completed)
 	assertOutput(t, q, first.ID, fixture.replacement)
 	starts := fixture.resetStarts()
-	for i := range 4 {
-		want := int64(i * len(fixture.original) / 4)
+	for i := range 8 {
+		want := int64(i * len(fixture.original) / 8)
 		if !starts[want] {
 			t.Errorf("changed file should restart range at %d; got %v", want, starts)
 		}
@@ -172,7 +378,7 @@ type rangeFixture struct {
 func newRangeFixture(t *testing.T) *rangeFixture {
 	t.Helper()
 	fixture := &rangeFixture{
-		original: make([]byte, 4<<20), replacement: make([]byte, 4<<20), starts: make(map[int64]bool),
+		original: make([]byte, 8<<20), replacement: make([]byte, 8<<20), starts: make(map[int64]bool),
 	}
 	for i := range fixture.original {
 		fixture.original[i] = byte(i*31 + i/4096)
@@ -195,6 +401,9 @@ func (f *rangeFixture) serve(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		f.mu.Lock()
+		f.starts[int64(start)] = true
+		f.mu.Unlock()
 		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(body)))
 		w.Header().Set("Content-Length", fmt.Sprint(end-start+1))
 		w.WriteHeader(http.StatusPartialContent)

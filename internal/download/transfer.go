@@ -13,18 +13,26 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 	"unicode/utf16"
 )
 
 type plan struct {
-	URL       string `json:"url"`
-	Size      int64  `json:"size"`
-	Validator string `json:"validator"`
-	Parts     int    `json:"parts"`
+	URL       string      `json:"url"`
+	Size      int64       `json:"size"`
+	Validator string      `json:"validator"`
+	Parts     int         `json:"parts,omitempty"`
+	Ranges    []byteRange `json:"ranges,omitempty"`
 }
+
+type byteRange struct {
+	Start int64 `json:"start"`
+	Next  int64 `json:"next"`
+	End   int64 `json:"end"`
+}
+
+var minimumRangeSize int64 = 256 << 10
 
 type segment struct{ start, end int64 }
 
@@ -125,11 +133,7 @@ func (q *Queue) transfer(ctx context.Context, run *attempt, job *record) error {
 		validator := responseValidator(resp)
 		_ = resp.Body.Close()
 		if validator != "" {
-			parts := 1
-			if size >= 4<<20 {
-				parts = 4
-			}
-			p = &plan{URL: resp.Request.URL.String(), Size: size, Validator: validator, Parts: parts}
+			p = &plan{URL: resp.Request.URL.String(), Size: size, Validator: validator}
 		} else {
 			return q.streamFull(ctx, run, job, dir, assembly)
 		}
@@ -141,46 +145,113 @@ func (q *Queue) transfer(ctx context.Context, run *attempt, job *record) error {
 	default:
 		return fmt.Errorf("server returned HTTP %d", resp.StatusCode)
 	}
-	previousPlan := job.Plan
-	if previousPlan == nil || *previousPlan != *p {
+	previous := job.Plan
+	restart := previous == nil || previous.URL != p.URL || previous.Size != p.Size || previous.Validator != p.Validator
+	if !restart && len(previous.Ranges) > 0 {
+		info, err := os.Stat(assembly)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		restart = errors.Is(err, os.ErrNotExist)
+		if !restart {
+			for _, r := range previous.Ranges {
+				if info.Size() < r.Next {
+					restart = true
+					break
+				}
+			}
+		}
+	}
+	if restart {
 		if err := clearParts(dir); err != nil {
 			return err
 		}
-	}
-	sizes := make([]int64, p.Parts)
-	var existing int64
-	connections := 0
-	for i := range sizes {
-		span := p.segment(i)
-		filename := partPath(dir, i)
-		if info, err := os.Stat(filename); err == nil {
-			if info.Size() > span.end-span.start+1 {
-				if err := os.Remove(filename); err != nil {
-					return err
-				}
-			} else {
-				sizes[i] = info.Size()
-			}
-		} else if !errors.Is(err, os.ErrNotExist) {
+		if err := os.Remove(assembly); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
-		existing += sizes[i]
-		if sizes[i] < span.end-span.start+1 {
-			connections++
+	} else if len(previous.Ranges) > 0 {
+		p.Ranges = append([]byteRange(nil), previous.Ranges...)
+	} else if previous.Parts > 0 {
+		if err := migrateParts(ctx, dir, assembly, previous, p); err != nil {
+			return err
 		}
 	}
-	if err := q.prepare(ctx, run, job, p, name, new(p.Size), existing, connections); err != nil {
+	if len(p.Ranges) == 0 {
+		q.mu.Lock()
+		count := q.config.Connections
+		q.mu.Unlock()
+		if p.Size < 4<<20 {
+			count = 1
+		}
+		for i := 0; i < count; i++ {
+			start, end := int64(i)*p.Size/int64(count), int64(i+1)*p.Size/int64(count)-1
+			p.Ranges = append(p.Ranges, byteRange{start, start, end})
+		}
+	}
+	var existing int64
+	for _, r := range p.Ranges {
+		existing += r.Next - r.Start
+	}
+	if err := q.prepare(ctx, run, job, p, name, new(p.Size), existing, 0); err != nil {
 		return err
 	}
-	if err := q.downloadParts(ctx, job, dir, p, sizes); errors.Is(err, errRangeIgnored) {
+	if err := clearParts(dir); err != nil {
+		return err
+	}
+	if err := q.downloadRanges(ctx, run, job, assembly, p); errors.Is(err, errRangeIgnored) {
 		return q.streamFull(ctx, run, job, dir, assembly)
 	} else if err != nil {
 		return err
 	}
-	if err := joinParts(ctx, assembly, dir, p); err != nil {
+	return q.complete(ctx, job, "", assembly)
+}
+
+func migrateParts(ctx context.Context, dir, assembly string, previous, p *plan) (err error) {
+	f, err := os.OpenFile(assembly, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0600)
+	if err != nil {
 		return err
 	}
-	return q.complete(ctx, job, "", assembly)
+	defer func() { err = errors.Join(err, f.Close()) }()
+	for i := 0; i < previous.Parts; i++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		span := previous.segment(i)
+		r := byteRange{span.start, span.start, span.end}
+		src, e := os.Open(partPath(dir, i))
+		if e != nil && !errors.Is(e, os.ErrNotExist) {
+			return e
+		}
+		if e == nil {
+			info, statErr := src.Stat()
+			var copyErr error
+			if statErr == nil && info.Size() <= span.end-span.start+1 {
+				n, err := io.Copy(io.NewOffsetWriter(f, span.start), checkedReader{ctx, src})
+				r.Next += n
+				copyErr = err
+			}
+			if err := errors.Join(statErr, copyErr, src.Close()); err != nil {
+				return err
+			}
+		}
+		p.Ranges = append(p.Ranges, r)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return f.Sync()
+}
+
+type checkedReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (r checkedReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.r.Read(p)
 }
 
 func (q *Queue) streamFull(ctx context.Context, run *attempt, job *record, dir, assembly string) error {
@@ -237,36 +308,172 @@ func (q *Queue) prepare(ctx context.Context, run *attempt, job *record, p *plan,
 	return q.saveLocked()
 }
 
-func (q *Queue) downloadParts(ctx context.Context, job *record, dir string, p *plan, sizes []int64) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	var workers sync.WaitGroup
-	var firstErr error
-	var fail sync.Once
-	for i, size := range sizes {
-		span := p.segment(i)
-		start := span.start + size
-		if start > span.end {
-			continue
-		}
-		workers.Go(func() {
-			if err := q.downloadPart(ctx, job, partPath(dir, i), p, start, span.end, size); err != nil {
-				fail.Do(func() { firstErr = err; cancel() })
-			}
-			q.mu.Lock()
-			if job.Connections > 0 {
-				job.Connections--
-			}
-			q.mu.Unlock()
-		})
-	}
-	workers.Wait()
-	return firstErr
+type liveRange struct {
+	byteRange
+	busy bool
 }
 
-func (q *Queue) downloadPart(ctx context.Context, job *record, filename string, p *plan, start, end, originalSize int64) error {
+func (q *Queue) downloadRanges(ctx context.Context, run *attempt, job *record, filename string, p *plan) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	f, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	ranges := make([]*liveRange, 0, len(p.Ranges))
+	for _, r := range p.Ranges {
+		ranges = append(ranges, &liveRange{byteRange: r})
+	}
+	checkpoint := func() error {
+		q.mu.Lock()
+		defer q.mu.Unlock()
+		if err := f.Sync(); err != nil {
+			return err
+		}
+		saved := *p
+		saved.Ranges = make([]byteRange, len(ranges))
+		for i, r := range ranges {
+			saved.Ranges[i] = r.byteRange
+			if r.busy && r.Next > r.End {
+				saved.Ranges[i].Next = r.End
+			}
+		}
+		job.Plan = &saved
+		return q.saveLocked()
+	}
+	type result struct {
+		id  int
+		err error
+	}
+	done := make(chan result, 32)
+	type worker struct {
+		cancel  context.CancelFunc
+		stopped bool
+	}
+	active := make(map[int]*worker)
+	nextID := 0
+	var firstErr error
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	stopping := false
+	for {
+		q.mu.Lock()
+		target := q.config.Connections
+		if p.Size < 4<<20 {
+			target = 1
+		}
+		if stopping {
+			target = 0
+		}
+		excess := len(active) - target
+		for _, w := range active {
+			if w.stopped {
+				excess--
+			}
+		}
+		for _, w := range active {
+			if excess <= 0 {
+				break
+			}
+			if w.stopped {
+				continue
+			}
+			w.cancel()
+			w.stopped = true
+			excess--
+		}
+		for len(active) < target {
+			var assigned *liveRange
+			for _, r := range ranges {
+				if !r.busy && r.Next <= r.End {
+					assigned = r
+					break
+				}
+			}
+			if assigned == nil && p.Size >= 4<<20 {
+				var largest *liveRange
+				for _, r := range ranges {
+					if r.End-r.Next+1 >= 2*minimumRangeSize && (largest == nil || r.End-r.Next > largest.End-largest.Next) {
+						largest = r
+					}
+				}
+				if largest != nil {
+					mid := largest.Next + (largest.End-largest.Next+1)/2
+					assigned = &liveRange{byteRange: byteRange{mid, mid, largest.End}}
+					largest.End = mid - 1
+					ranges = append(ranges, assigned)
+				}
+			}
+			if assigned == nil {
+				break
+			}
+			assigned.busy = true
+			workerCtx, stop := context.WithCancel(ctx)
+			id := nextID
+			nextID++
+			active[id] = &worker{cancel: stop}
+			job.Connections++
+			go func(r *liveRange) {
+				err := q.downloadRange(workerCtx, job, f, p, r)
+				q.mu.Lock()
+				r.busy = false
+				if job.Connections > 0 {
+					job.Connections--
+				}
+				q.mu.Unlock()
+				done <- result{id, err}
+			}(assigned)
+		}
+		q.mu.Unlock()
+		if len(active) == 0 {
+			break
+		}
+		select {
+		case result := <-done:
+			active[result.id].cancel()
+			delete(active, result.id)
+			if result.err != nil && !errors.Is(result.err, context.Canceled) && ctx.Err() == nil {
+				if firstErr == nil {
+					firstErr = result.err
+				}
+				stopping = true
+				cancel()
+			}
+			if err := checkpoint(); err != nil && firstErr == nil {
+				firstErr = err
+				stopping = true
+				cancel()
+			}
+		case <-run.changed:
+		case <-ticker.C:
+			if err := checkpoint(); err != nil && firstErr == nil {
+				firstErr = err
+				stopping = true
+				cancel()
+			}
+		case <-ctx.Done():
+			stopping = true
+		}
+	}
+	if err := checkpoint(); firstErr == nil {
+		firstErr = err
+	}
+	if firstErr != nil {
+		return firstErr
+	}
+	return ctx.Err()
+}
+
+func (q *Queue) downloadRange(ctx context.Context, job *record, f *os.File, p *plan, r *liveRange) error {
+	q.mu.Lock()
+	start, end := r.Next, r.End
+	q.mu.Unlock()
 	resp, err := q.request(ctx, p.URL, fmt.Sprintf("%d-%d", start, end), p.Validator)
 	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		return err
 	}
 	defer resp.Body.Close()
@@ -278,27 +485,55 @@ func (q *Queue) downloadPart(ctx context.Context, job *record, filename string, 
 		resp.Request.URL.String() != p.URL || !matchesValidator(resp, p.Validator) || !identityResponse(resp) {
 		return errors.New("server changed the file or rejected a byte range; retry to check for a new version")
 	}
-	length := end - start + 1
-	if resp.ContentLength >= 0 && resp.ContentLength != length {
+	if resp.ContentLength >= 0 && resp.ContentLength != end-start+1 {
 		return errors.New("server sent the wrong length for a byte range")
 	}
-	return q.withFile(filename, os.O_APPEND, func(f *os.File) error {
-		if _, err := io.CopyN(progressWriter{f, q, job}, resp.Body, length); err != nil {
+	buf := make([]byte, 32<<10)
+	for {
+		if err := ctx.Err(); err != nil {
 			return err
 		}
-		// Read to EOF so erroneous extra bytes cannot masquerade as a completed part.
+		q.mu.Lock()
+		remaining := r.End - r.Next + 1
+		q.mu.Unlock()
+		if remaining <= 0 {
+			break
+		}
+		n, readErr := resp.Body.Read(buf[:min(int64(len(buf)), remaining)])
+		q.mu.Lock()
+		n = int(min(int64(n), r.End-r.Next+1))
+		written, writeErr := f.WriteAt(buf[:n], r.Next)
+		r.Next += int64(written)
+		job.Received += int64(written)
+		left := r.End - r.Next + 1
+		q.mu.Unlock()
+		if writeErr != nil {
+			return writeErr
+		}
+		if readErr != nil && left > 0 {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return io.ErrUnexpectedEOF
+		}
+	}
+	q.mu.Lock()
+	full := r.End == end
+	q.mu.Unlock()
+	if full {
 		var extra [1]byte
 		if n, err := resp.Body.Read(extra[:]); n > 0 || err != io.EOF {
-			if truncateErr := f.Truncate(originalSize); truncateErr != nil {
-				return truncateErr
-			}
 			q.mu.Lock()
-			job.Received -= length
+			job.Received -= r.Next - start
+			r.Next = start
 			q.mu.Unlock()
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			return errors.New("server failed to end the byte range correctly")
 		}
-		return nil
-	})
+	}
+	return nil
 }
 
 func (q *Queue) withFile(filename string, flag int, write func(*os.File) error) error {
@@ -311,44 +546,6 @@ func (q *Queue) withFile(filename string, flag int, write func(*os.File) error) 
 		err = f.Sync()
 	}
 	return errors.Join(err, f.Close())
-}
-
-func joinParts(ctx context.Context, output, dir string, p *plan) (err error) {
-	dst, err := os.Create(output)
-	if err != nil {
-		return err
-	}
-	defer func() { err = errors.Join(err, dst.Close()) }()
-	for i := 0; i < p.Parts; i++ {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		src, err := os.Open(partPath(dir, i))
-		if err != nil {
-			return err
-		}
-		n, err := io.Copy(dst, checkedReader{ctx, src})
-		if err := errors.Join(err, src.Close()); err != nil {
-			return err
-		}
-		span := p.segment(i)
-		if n != span.end-span.start+1 {
-			return errors.New("a download part is incomplete")
-		}
-	}
-	return dst.Sync()
-}
-
-type checkedReader struct {
-	ctx context.Context
-	r   io.Reader
-}
-
-func (r checkedReader) Read(p []byte) (int, error) {
-	if err := r.ctx.Err(); err != nil {
-		return 0, err
-	}
-	return r.r.Read(p)
 }
 
 func (q *Queue) complete(ctx context.Context, job *record, existing, assembly string) error {
@@ -499,8 +696,15 @@ func partialDirectory(job *record) string { return filepath.Join(job.Directory, 
 func partPath(dir string, i int) string   { return filepath.Join(dir, fmt.Sprintf("part-%d", i)) }
 
 func clearParts(dir string) error {
-	for i := 0; i < 4; i++ {
-		if err := os.Remove(partPath(dir, i)); err != nil && !errors.Is(err, os.ErrNotExist) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry.Name(), "part-") {
+			continue
+		}
+		if err := os.Remove(filepath.Join(dir, entry.Name())); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 	}
