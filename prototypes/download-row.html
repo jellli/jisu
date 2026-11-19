@@ -12,183 +12,176 @@
       font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
       font-size: 14px;
       line-height: 1.5;
-      --canvas: #f5f7f9;
-      --sidebar: #f0f3f6;
+      font-weight: 400;
+      --canvas: #eeefef;
+      --sidebar: #f7f8f7;
       --surface: #fff;
-      --subtle: #f8fafb;
-      --text: #152431;
-      --muted: #526373;
-      --border: #dce4e9;
-      --soft-border: #e8edf1;
+      --subtle: #f4f5f4;
+      --text: #202522;
+      --secondary: #535b56;
+      --muted: #68716b;
+      --border: #d3d8d4;
+      --soft-border: #e8ebe8;
       --brand: #08715e;
       --brand-strong: #085d50;
-      --brand-soft: #deefe9;
-      --amber: #78500e;
-      --amber-soft: #fcf2dd;
-      --danger: #a32938;
-      --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+      --danger: #a43d35;
+      --mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
     }
     *, *::before, *::after { box-sizing: border-box; }
     body { margin: 0; color: var(--text); background: var(--canvas); }
     h1, h2, h3, p { margin: 0; }
+    strong { font-weight: 500; }
     button, input, select { font: inherit; color: inherit; }
     button, select, summary { cursor: pointer; }
     button { -webkit-tap-highlight-color: transparent; }
-    button:not(.proto-picker-item):active { transform: scale(.97); }
+    button:not(.proto-picker-item):active { transform: scale(.98); }
     :focus-visible { outline: 2px solid var(--brand); outline-offset: 4px; }
-    .icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
-    .lab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; padding: 16px 30px; border-bottom: 1px solid var(--border); background: var(--surface); font-size: 12px; }
-    .lab-label { display: flex; align-items: center; gap: 10px; }
-    .lab-label strong { font-weight: 650; letter-spacing: .06em; }
-    .lab-label span { color: var(--muted); }
-    .lab-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; }
-    .lab-controls label { display: flex; align-items: center; gap: 7px; }
-    input { accent-color: var(--brand); }
-    select { border: 1px solid var(--border); border-radius: 6px; padding: 4px 24px 4px 8px; background: var(--subtle); }
-    .frame { max-width: 1340px; margin: 0 auto; padding: 34px 30px 110px; }
-    .intro { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 26px; }
-    .eyebrow { display: flex; align-items: center; gap: 7px; color: var(--brand); font-size: 12px; font-weight: 600; margin-bottom: 10px; }
-    h1 { font-size: clamp(25px, 3vw, 36px); font-weight: 650; line-height: 1.2; letter-spacing: -.04em; }
-    .intro p { margin-top: 10px; font-size: 13px; color: var(--muted); }
-    .keys { text-align: right; color: var(--muted); font-size: 11px; flex: none; }
-    kbd { font: inherit; display: inline-block; min-width: 20px; text-align: center; padding: 2px 5px; margin: 0 1px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; }
-    .window { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); overflow: hidden; box-shadow: 0 12px 40px #15243108; }
-    .titlebar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 13px 22px; border-bottom: 1px solid var(--soft-border); font-size: 11px; color: var(--muted); background: var(--subtle); }
-    .wordmark { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 13px; font-weight: 650; }
-    .wordmark .icon { color: var(--brand); }
-    .app { display: grid; grid-template-columns: 164px minmax(0, 1fr); min-height: 510px; }
-    .sidebar { padding: 24px 12px; background: var(--sidebar); border-right: 1px solid var(--border); font-size: 12px; }
-    .sidebar-label { padding: 0 12px; margin-bottom: 16px; color: var(--muted); font-size: 10px; letter-spacing: .12em; }
-    .nav-line { display: flex; align-items: center; justify-content: space-between; gap: 9px; padding: 11px 12px; border-radius: 7px; color: var(--muted); }
-    .nav-line.current { color: var(--brand-strong); background: var(--brand-soft); font-weight: 600; }
-    .nav-line span:last-child { font-size: 10px; font-variant-numeric: tabular-nums; }
-    .save-location { margin: 145px 12px 0; color: var(--muted); font-size: 10px; line-height: 1.8; overflow-wrap: anywhere; }
-    .workspace { min-width: 0; padding: 27px 26px 30px; }
-    .list-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 26px; }
-    .list-header h2 { font-size: 20px; letter-spacing: -.025em; font-weight: 650; }
-    .list-header p { color: var(--muted); font-size: 11px; margin-top: 5px; }
-    .total-speed { text-align: right; font-size: 11px; color: var(--muted); }
-    .total-speed strong { display: block; color: var(--brand); font-size: 21px; font-weight: 550; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
-    .list { display: grid; gap: 12px; }
-    .row { min-width: 0; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
+    .icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+    .lab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; padding: 12px 24px; border-bottom: 1px solid var(--border); background: var(--sidebar); font-size: 12px; color: var(--secondary); }
+    .lab-label { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+    .lab-label strong { font-weight: 500; color: var(--text); }
+    .lab-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+    .lab-controls label { display: flex; align-items: center; gap: 8px; }
+    input { accent-color: var(--text); }
+    select { min-height: 32px; border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; background: var(--surface); }
+    .frame { max-width: 1600px; margin: 0 auto; padding: 24px 24px 104px; }
+    .intro { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 24px; }
+    .eyebrow { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    h1 { font-size: 20px; font-weight: 500; line-height: 1.4; }
+    .intro p { margin-top: 4px; font-size: 12px; color: var(--secondary); }
+    .keys { text-align: right; color: var(--muted); font-size: 12px; flex: none; }
+    .keys > div + div { margin-top: 4px; }
+    kbd { font: inherit; display: inline-block; min-width: 20px; text-align: center; padding: 0 4px; margin: 0 2px; background: var(--sidebar); border: 1px solid var(--border); border-radius: 4px; }
+    .window { border: 1px solid #c7cdc8; border-radius: 12px; background: var(--surface); overflow: hidden; box-shadow: 0 2px 8px #20252208; }
+    .titlebar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 24px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted); background: var(--sidebar); }
+    .wordmark { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 16px; font-weight: 600; }
+    .wordmark span { color: var(--muted); font-size: 12px; font-weight: 400; }
+    .app { display: grid; grid-template-columns: 240px minmax(0, 1fr); }
+    .sidebar { display: flex; flex-direction: column; padding: 24px 16px; background: var(--sidebar); border-right: 1px solid var(--soft-border); font-size: 14px; }
+    .sidebar-label { padding: 0 12px; margin-bottom: 8px; color: var(--muted); font-size: 12px; }
+    .nav-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; line-height: 20px; margin: 2px 0; padding: 8px 12px; border-radius: 4px; color: var(--secondary); }
+    .nav-line.current { color: var(--text); background: #e8ebe8; font-weight: 500; }
+    .nav-line span:last-child { font-family: var(--mono); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
+    .save-location { margin: auto 12px 0; padding-top: 48px; color: var(--muted); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+    .save-location code { display: block; margin-top: 4px; font-family: var(--mono); color: var(--secondary); }
+    .save-location p { margin-top: 24px; }
+    .workspace { min-width: 0; padding: 24px 32px; }
+    .list-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 24px; }
+    .list-header h2 { font-size: 20px; font-weight: 500; }
+    .list-header p { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .total-speed { text-align: right; font-size: 12px; color: var(--muted); }
+    .total-speed strong { display: block; color: var(--text); font-size: 24px; font-weight: 400; }
+    .unit { color: var(--secondary); font: 12px var(--mono); }
+    .list { display: grid; }
+    .row { min-width: 0; padding: 24px 0; border-top: 1px solid var(--soft-border); background: var(--surface); --fill: var(--brand); }
     .file { display: flex; align-items: center; min-width: 0; gap: 12px; }
-    .file-type { display: grid; place-items: center; width: 36px; height: 42px; flex: none; border: 1px solid var(--border); border-radius: 6px; background: var(--subtle); color: var(--muted); font-size: 9px; font-weight: 650; letter-spacing: .04em; }
+    .file-icon { display: grid; place-items: center; width: 24px; height: 32px; flex: none; color: var(--muted); }
     .file-copy { min-width: 0; }
-    .filename { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .file-sub { color: var(--muted); font-size: 10px; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .state { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: var(--brand); white-space: nowrap; }
-    .state::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
-    [data-state="paused"] .state { color: var(--amber); }
+    .filename { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-sub { color: var(--muted); font-size: 12px; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .state { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--secondary); white-space: nowrap; }
+    .state::before { content: ''; width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+    [data-state="downloading"] .state { color: var(--brand); }
     [data-state="failed"] .state { color: var(--danger); }
-    [data-state="paused"] { --fill: #a39165; }
-    [data-state="failed"] { --fill: var(--danger); }
-    .action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); font-size: 11px; white-space: nowrap; transition: background 140ms ease-out, transform 120ms var(--ease-out); }
-    .action .icon { width: 14px; height: 14px; }
-    .primary { background: var(--brand-soft); color: var(--brand-strong); border-color: transparent; }
+    [data-state="paused"], [data-state="failed"] { --fill: #8c9690; }
+    [data-state="completed"] { --fill: #a9b1ab; }
+    .action { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 32px; padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface); font-size: 12px; white-space: nowrap; transition: background 140ms var(--ease-out), transform 120ms var(--ease-out); }
+    .primary { background: var(--text); color: var(--surface); border-color: var(--text); }
     .stat { font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .progress { height: 5px; border-radius: 3px; background: var(--soft-border); overflow: hidden; }
+    .row-meta, .connection, .piece-caption { font-variant-numeric: tabular-nums; }
+    .progress { height: 4px; border-radius: 2px; background: var(--soft-border); overflow: hidden; }
     .fill { display: block; height: 100%; width: 100%; background: var(--fill, var(--brand)); transform-origin: left; }
-    .segment-track { display: flex; gap: 3px; height: 7px; }
-    .segment-track > span { flex: 1; background: var(--soft-border); border-radius: 2px; overflow: hidden; }
-    .segment-track .fill { background: var(--fill, var(--brand)); }
-    .row-meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 7px 12px; color: var(--muted); font-size: 10px; margin-top: 8px; }
-    .row-meta strong { color: var(--text); font-weight: 550; }
-    .details { margin-top: 14px; border-top: 1px solid var(--soft-border); padding-top: 10px; }
-    summary { width: fit-content; color: var(--muted); font-size: 10px; padding: 3px 0; }
-    .connection-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 13px 0 2px; }
-    .connection { min-width: 0; padding: 9px; border: 1px solid var(--soft-border); border-radius: 5px; }
-    .connection-head { display: flex; align-items: center; justify-content: space-between; gap: 3px; font-size: 9px; color: var(--muted); margin-bottom: 8px; }
-    .connection small { display: block; margin-top: 6px; font-size: 9px; color: var(--muted); }
-    .legend { display: flex; flex-wrap: wrap; gap: 15px; color: var(--muted); font-size: 9px; margin-top: 12px; }
-    .legend span { display: flex; gap: 5px; align-items: center; }
-    .swatch { display: inline-block; width: 7px; height: 7px; border-radius: 1px; background: var(--brand); }
+    .segment-track { display: flex; gap: 4px; }
+    .segment-lane { flex: 1; min-width: 0; }
+    .lane-number { display: block; margin-bottom: 4px; color: var(--muted); font: 12px/16px var(--mono); }
+    .lane-bar { display: block; height: 8px; background: var(--soft-border); border-radius: 2px; overflow: hidden; }
+    .row-meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 16px; color: var(--secondary); font-size: 12px; margin-top: 8px; line-height: 20px; }
+    .row-meta strong { color: var(--text); font-weight: 500; }
+    .details { margin-top: 12px; }
+    summary { width: fit-content; color: var(--muted); font-size: 12px; padding: 4px 0; }
+    .connection-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 24px; padding: 16px 0 0; }
+    .connection { min-width: 0; }
+    .connection-head { display: flex; align-items: center; justify-content: space-between; gap: 4px; font-size: 12px; color: var(--secondary); margin-bottom: 8px; }
+    .connection-head > span:first-child { color: var(--muted); }
+    .connection small { display: block; margin-top: 8px; font: 12px/16px var(--mono); color: var(--muted); }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--muted); font-size: 12px; margin-top: 16px; }
+    .legend span { display: flex; gap: 8px; align-items: center; }
+    .swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--fill, var(--brand)); }
     .swatch.empty { background: var(--soft-border); border: 1px solid var(--border); }
-    .footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 10px; color: var(--muted); margin-top: 20px; }
-    .rationale { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 20px; color: var(--muted); font-size: 11px; }
-    .rationale strong { font-weight: 600; color: var(--text); }
-    .rail .list { gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-    .rail .row { border: none; border-radius: 0; padding: 17px 15px; }
-    .rail .row + .row { border-top: 1px solid var(--soft-border); }
-    .rail-top { display: grid; grid-template-columns: minmax(120px, 1fr) 78px 70px; gap: 15px; align-items: center; }
-    .rail .file-type { width: 29px; height: 34px; font-size: 8px; }
-    .rail .file { gap: 9px; }
-    .rail .rail-progress { padding-left: 38px; margin-top: 12px; }
-    .rail .connection-grid { padding-left: 38px; }
-    .rail .details { margin-left: 38px; margin-top: 10px; border-top: 0; padding: 0; }
-    .rail .details .connection-grid { padding-left: 0; }
-    .mosaic .row { padding: 18px; }
-    .card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-    .card-actions { display: flex; flex-direction: column; align-items: end; gap: 7px; }
-    .mosaic-body { display: grid; grid-template-columns: minmax(0, 1fr) 116px; align-items: center; gap: 22px; margin-top: 19px; }
-    .piece-map { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 10px; }
+    .footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; font-size: 12px; color: var(--muted); padding-top: 16px; border-top: 1px solid var(--soft-border); }
+    .rationale { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 24px; margin-top: 16px; color: var(--secondary); font-size: 12px; }
+    .rationale strong { font-weight: 500; color: var(--text); }
+    .rail .row { padding: 16px 0; }
+    .rail-top { display: grid; grid-template-columns: minmax(0, 1fr) 80px 96px; gap: 16px; align-items: center; }
+    .rail .rail-progress { padding-left: 36px; margin-top: 8px; }
+    .rail .details { margin-left: 36px; margin-top: 4px; }
+    .card-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+    .card-actions { display: flex; align-items: center; gap: 16px; }
+    .mosaic-body { display: grid; grid-template-columns: minmax(0, 1fr) 144px; align-items: center; gap: 32px; margin-top: 20px; }
+    .piece-map { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
     .piece-line { min-width: 0; }
-    .piece-caption { display: flex; justify-content: space-between; gap: 2px; color: var(--muted); font-size: 8px; margin-bottom: 4px; }
-    .pieces { display: flex; gap: 2px; height: 9px; }
-    .piece { flex: 1; min-width: 0; background: var(--soft-border); border-radius: 1px; }
-    .piece.done { background: var(--fill, var(--brand)); opacity: .84; }
-    .piece.partial { background: var(--fill, var(--brand)); opacity: .37; }
-    .mosaic-value { border-left: 1px solid var(--soft-border); padding-left: 20px; }
-    .percent { font-size: 33px; font-weight: 500; line-height: 1.1; letter-spacing: -.055em; }
-    .percent small { font-size: 14px; margin-left: 2px; color: var(--muted); }
-    .mosaic-value .row-meta { display: grid; margin-top: 7px; gap: 2px; }
-    .mosaic .row:not(:first-child) .mosaic-body { margin-top: 14px; }
-    .focus .row { padding: 22px; }
-    .focus .row:first-child { border-top: 3px solid var(--brand); }
-    .focus-main { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 21px 0 12px; }
-    .focus-main .percent { font-size: 42px; }
-    .focus .progress { height: 7px; }
-    .focus .row:not(:first-child) { padding: 15px 22px; }
-    .focus .row:not(:first-child) .focus-main { margin: 13px 0 8px; }
-    .focus .row:not(:first-child) .percent { font-size: 22px; }
-    .focus .row:not(:first-child) .file-type { height: 34px; width: 29px; }
-    .focus .row:not(:first-child) .details { margin-top: 9px; }
-    .status-line { color: var(--muted); font-size: 11px; }
+    .piece-caption { display: flex; justify-content: space-between; gap: 4px; color: var(--muted); font: 12px/16px var(--mono); margin-bottom: 8px; }
+    .pieces { display: flex; gap: 2px; height: 12px; }
+    .piece { flex: 1; min-width: 0; background: var(--soft-border); }
+    .piece.done { background: var(--fill, var(--brand)); }
+    .piece.partial { background: var(--fill, var(--brand)); opacity: .4; }
+    .mosaic-value { border-left: 1px solid var(--soft-border); padding-left: 24px; }
+    .percent { font-size: 32px; font-weight: 400; line-height: 1.25; }
+    .percent small { font-size: 16px; margin-left: 4px; color: var(--muted); }
+    .mosaic-value .row-meta { display: grid; margin-top: 8px; gap: 4px; }
+    .focus-main { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin: 16px 0; }
+    .focus .progress { height: 8px; }
+    .status-line { color: var(--muted); font-size: 12px; }
     .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
     @media (hover: hover) and (pointer: fine) {
-      .action:hover { background: var(--subtle); border-color: #b7c7ce; }
-      .primary:hover { background: #cce7dd; }
-      summary:hover { color: var(--brand); }
+      .action:hover { background: var(--subtle); }
+      .primary:hover { background: #3d4840; }
+      summary:hover { color: var(--text); }
     }
-    @media (max-width: 900px) {
-      .app { grid-template-columns: 130px minmax(0, 1fr); }
-      .workspace { padding: 22px 18px; }
-      .sidebar { padding: 24px 8px; }
-      .mosaic-body { gap: 13px; grid-template-columns: minmax(0, 1fr) 90px; }
-      .mosaic-value { padding-left: 13px; }
-      .rail-top { gap: 8px; grid-template-columns: minmax(100px, 1fr) 65px 58px; }
+    @media (max-width: 1200px) {
+      .app { grid-template-columns: 240px minmax(0, 1fr); }
+      .workspace { padding: 24px; }
+      .piece-map { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .mosaic-body { gap: 24px; grid-template-columns: minmax(0, 1fr) 128px; }
+      .mosaic-value { padding-left: 16px; }
     }
-    @media (max-width: 660px) {
-      .lab { padding: 13px 16px; }
-      .lab-label span { display: none; }
-      .lab-controls { gap: 12px; }
-      .frame { padding: 25px 12px 100px; }
-      .intro { padding: 0 4px; margin-bottom: 20px; }
-      .intro p { max-width: 265px; font-size: 11px; }
-      .keys { display: none; }
+    @media (max-width: 1000px) {
       .app { grid-template-columns: minmax(0, 1fr); }
       .sidebar { display: none; }
-      .workspace { padding: 22px 12px; }
+      .piece-map { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+    @media (max-width: 660px) {
+      .lab { padding: 12px 16px; }
+      .lab-label > span { display: none; }
+      .lab-controls { gap: 12px; }
+      .frame { padding: 16px 8px 104px; }
+      .intro { padding: 0 8px; margin-bottom: 16px; }
+      .intro p { max-width: 32ch; }
+      .keys { display: none; }
+      .window { border-radius: 8px; }
+      .workspace { padding: 20px 12px; }
       .titlebar { padding: 12px 16px; }
-      .titlebar > span { font-size: 9px; }
-      .rail .row { padding: 16px 11px; }
-      .rail-top { grid-template-columns: minmax(0, 1fr) auto; }
-      .rail-top > .state { grid-column: 1; padding-left: 38px; }
-      .rail-top > .action { grid-column: 2; grid-row: 1 / 3; }
-      .connection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .mosaic .row, .focus .row { padding: 17px 12px; }
-      .focus .row:not(:first-child) { padding: 15px 12px; }
-      .mosaic-body { grid-template-columns: minmax(0, 1fr); gap: 15px; }
-      .mosaic-value { border-left: 0; padding-left: 0; display: flex; align-items: center; justify-content: space-between; }
-      .mosaic-value .row-meta { text-align: right; }
-      .piece-map { gap: 10px 8px; }
-      .file { gap: 8px; }
-      .file-type { width: 29px; height: 36px; font-size: 8px; }
-      .filename { font-size: 11px; }
-      .card-head { gap: 7px; }
-      .card-head .file { flex: 1; }
-      .action { font-size: 10px; padding: 5px 8px; }
-      .focus-main .percent { font-size: 36px; }
-      .rationale { padding: 0 4px; }
+      .titlebar > span { display: none; }
+      .list-header { gap: 8px; }
+      .list-header h2 { font-size: 18px; }
+      .total-speed strong { font-size: 20px; }
+      .rail-top { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+      .rail-top > .state { grid-column: 1; padding-left: 36px; }
+      .rail-top > .action { grid-column: 2; grid-row: 1 / 3; padding: 4px 8px; }
+      .rail .rail-progress { padding-left: 0; margin-top: 12px; }
+      .rail .details { margin-left: 0; }
+      .card-head { flex-wrap: wrap; gap: 12px; }
+      .card-head > .file { flex: 1 1 100%; }
+      .card-actions { width: 100%; justify-content: space-between; }
+      .focus .card-head > .action { margin-left: 36px; }
+      .connection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+      .mosaic-body { grid-template-columns: minmax(0, 1fr); gap: 16px; margin-top: 16px; }
+      .mosaic-value { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border-left: 0; padding-left: 0; }
+      .mosaic-value .row-meta { margin-top: 0; text-align: right; }
+      .piece-map { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .focus-main { flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+      .rationale { padding: 0 8px; }
     }
     @media (prefers-reduced-motion: reduce) {
       .action { transition: none; }
@@ -286,7 +279,7 @@
 </head>
 <body>
   <header class="lab">
-    <div class="lab-label"><strong>JISU / PROTOTYPE</strong><span>下载列表行 · 仅模拟数据，不会下载文件</span></div>
+    <div class="lab-label"><strong>Jisu · 下载行原型</strong><span>仅模拟数据，不会下载文件</span></div>
     <div class="lab-controls">
       <label>首行状态 <select id="scenario"><option value="downloading">下载中</option><option value="paused">已暂停</option><option value="failed">连接中断</option><option value="completed">已完成</option></select></label>
       <label><input type="checkbox" id="simulate" checked> 模拟传输</label>
@@ -303,6 +296,7 @@
   <noscript>请启用 JavaScript 以切换和操作原型。</noscript>
   <script>
     const paths = {
+      file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"/>',
       download: '<path d="M12 3v12m-5-5 5 5 5-5M5 17v4h14v-4"/>',
       pause: '<path d="M9 5v14m6-14v14"/>',
       play: '<path d="m8 5 11 7-11 7z"/>',
@@ -314,9 +308,9 @@
     const baseSegments = [1, .78, .36, .90, .55, .48, .67, .30];
     const rates = [0, 2.8, 2.3, 3.2, 2.7, 2.1, 2.5, 2.8];
     const directions = [
-      { name: 'Rail', number: '01', title: '少一点高度，多一点掌控', description: '八路连接收进一行。文件、进度、速度，各就各位。', strength: '高密度扫描 · 分段进度常驻', cost: '连接诊断需要展开', className: 'rail' },
-      { name: 'Mosaic', number: '02', title: '每一段，都看得见', description: '连接是地图，不是一个平均值。哪一段在跑，一眼就知道。', strength: '连接地图 · 每段吞吐常驻', cost: '每个任务占用更多空间', className: 'mosaic' },
-      { name: 'Focus', number: '03', title: '先看结果，再看细节', description: '进度和剩余时间优先。需要时，再打开八路连接的工作现场。', strength: '低认知负担 · 详情按需展开', cost: '默认隐藏分段差异', className: 'focus' }
+      { name: 'Rail', number: '1', title: '紧凑下载列表', description: '八路进度常驻，连接速率按需展开', strength: '分段进度常驻，适合同时查看多个下载', cost: '连接速率需要展开', className: 'rail' },
+      { name: 'Mosaic', number: '2', title: '分段连接地图', description: '每路连接的已接收区块与当前速率', strength: '直接比较八路连接的传输情况', cost: '任务占用更多高度', className: 'mosaic' },
+      { name: 'Focus', number: '3', title: '总进度与剩余时间', description: '先查看下载结果，再展开分段连接', strength: '总进度优先，连接详情按需展开', cost: '默认不显示分段差异', className: 'focus' }
     ];
     let tasks = [];
     let direction = 0;
@@ -342,7 +336,7 @@
       return seconds >= 60 ? `约 ${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒` : `约 ${seconds} 秒`;
     }
     function file(task) {
-      return `<div class="file"><span class="file-type" aria-hidden="true">${task.ext}</span><div class="file-copy"><h3 class="filename" title="${task.name}">${task.name}</h3><p class="file-sub">${task.source} <span aria-hidden="true">·</span> ${bytes(task.size)}</p></div></div>`;
+      return `<div class="file"><span class="file-icon" aria-hidden="true">${icon('file')}</span><div class="file-copy"><h3 class="filename" title="${task.name}">${task.name}</h3><p class="file-sub">${task.source} <span aria-hidden="true">·</span> ${bytes(task.size)} <span aria-hidden="true">·</span> ${task.ext}</p></div></div>`;
     }
     function state(task) { return `<span class="state" data-status>${labels[task.state]}</span>`; }
     function action(task, index) {
@@ -352,10 +346,10 @@
     }
     function track(task, index, big = false) {
       if (big) return `<div class="progress" role="progressbar" aria-label="${task.name} 总进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(progress(task) * 100)}" data-progress><span class="fill" data-total style="transform:scaleX(${progress(task)})"></span></div>`;
-      return `<div class="segment-track" role="progressbar" aria-label="${task.name} 八路分段总进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(progress(task) * 100)}" data-progress>${task.segments.map((value, n) => `<span title="连接 ${n + 1}"><i class="fill" data-segment="${n}" style="transform:scaleX(${value})"></i></span>`).join('')}</div>`;
+      return `<div class="segment-track" role="progressbar" aria-label="${task.name} 八路分段总进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(progress(task) * 100)}" data-progress>${task.segments.map((value, n) => `<span class="segment-lane" title="连接 ${n + 1}"><span class="lane-number" aria-hidden="true">${n + 1}</span><span class="lane-bar"><i class="fill" data-segment="${n}" style="transform:scaleX(${value})"></i></span></span>`).join('')}</div>`;
     }
     function connections(task, index, opened = false) {
-      return `<details class="details" id="connections-${index}" ${opened ? 'open' : ''}><summary>连接详情 · 8 路并行</summary><div class="connection-grid">${task.segments.map((value, n) => `<div class="connection"><div class="connection-head"><span>连接 ${String(n + 1).padStart(2, '0')}</span><span class="stat" data-connection-percent="${n}">${Math.floor(value * 100)}%</span></div><div class="progress"><span class="fill" data-segment="${n}" style="transform:scaleX(${value})"></span></div><small class="stat" data-connection-rate="${n}">${rate(task, n).toFixed(1)} MB/s</small></div>`).join('')}</div><div class="legend"><span><i class="swatch"></i>已接收</span><span><i class="swatch empty"></i>等待接收</span><span>HTTP Range · 断点保留</span></div></details>`;
+      return `<details class="details" id="connections-${index}" ${opened ? 'open' : ''}><summary>连接详情 · 8 路并行</summary><div class="connection-grid">${task.segments.map((value, n) => `<div class="connection"><div class="connection-head"><span>连接 ${n + 1}</span><span class="stat" data-connection-percent="${n}">${Math.floor(value * 100)}%</span></div><div class="progress"><span class="fill" data-segment="${n}" style="transform:scaleX(${value})"></span></div><small class="stat" data-connection-rate="${n}">${rate(task, n).toFixed(1)} MB/s</small></div>`).join('')}</div><div class="legend"><span><i class="swatch"></i>已接收</span><span><i class="swatch empty"></i>等待接收</span><span>HTTP Range · 断点保留</span></div></details>`;
     }
     function meta(task, percent = true) {
       return `<div class="row-meta"><span class="stat"><strong data-percent>${Math.floor(progress(task) * 100)}%</strong>${percent ? ' <span aria-hidden="true">·</span> ' : ' ' }<span data-bytes>${bytes(task.size * progress(task))} / ${bytes(task.size)}</span></span><span class="stat"><strong data-speed>${speed(task).toFixed(1)} MB/s</strong> <span aria-hidden="true">·</span> <span data-remaining>${remaining(task)}</span></span></div>`;
@@ -364,7 +358,7 @@
       return `<article class="row" data-row="${index}" data-state="${task.state}" aria-label="${task.name}"><div class="rail-top">${file(task)}${state(task)}${action(task, index)}</div><div class="rail-progress">${track(task, index)}${meta(task)}</div>${connections(task, index)}</article>`;
     }
     function mosaic(task, index) {
-      return `<article class="row" data-row="${index}" data-state="${task.state}" aria-label="${task.name}"><div class="card-head">${file(task)}<div class="card-actions">${state(task)}${action(task, index)}</div></div><div class="mosaic-body"><div class="piece-map" role="group" aria-label="八路连接分块地图">${task.segments.map((value, n) => `<div class="piece-line"><div class="piece-caption"><span>${String(n + 1).padStart(2, '0')}</span><span class="stat" data-connection-rate="${n}">${rate(task, n).toFixed(1)} MB/s</span></div><div class="pieces" role="progressbar" aria-label="连接 ${n + 1}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.floor(value * 100)}" data-piece-progress="${n}">${Array.from({length: 12}, (_, piece) => `<span class="piece ${piece < Math.floor(value * 12) ? 'done' : piece < value * 12 ? 'partial' : ''}" data-piece="${n}:${piece}"></span>`).join('')}</div></div>`).join('')}</div><div class="mosaic-value"><div class="percent stat"><span data-percent>${Math.floor(progress(task) * 100)}</span><small>%</small></div><div class="row-meta"><strong class="stat" data-speed>${speed(task).toFixed(1)} MB/s</strong><span class="stat" data-remaining>${remaining(task)}</span></div></div></div><div class="row-meta"><span class="stat" data-bytes>${bytes(task.size * progress(task))} / ${bytes(task.size)}</span><span>8 连接 · 每格代表该段的 1/12</span></div>${connections(task, index)}</article>`;
+      return `<article class="row" data-row="${index}" data-state="${task.state}" aria-label="${task.name}"><div class="card-head">${file(task)}<div class="card-actions">${state(task)}${action(task, index)}</div></div><div class="mosaic-body"><div class="piece-map" role="group" aria-label="八路连接分块地图">${task.segments.map((value, n) => `<div class="piece-line"><div class="piece-caption"><span>${n + 1}</span><span class="stat" data-connection-rate="${n}">${rate(task, n).toFixed(1)} MB/s</span></div><div class="pieces" role="progressbar" aria-label="连接 ${n + 1}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.floor(value * 100)}" data-piece-progress="${n}">${Array.from({length: 12}, (_, piece) => `<span class="piece ${piece < Math.floor(value * 12) ? 'done' : piece < value * 12 ? 'partial' : ''}" data-piece="${n}:${piece}"></span>`).join('')}</div></div>`).join('')}</div><div class="mosaic-value"><div class="percent stat"><span data-percent>${Math.floor(progress(task) * 100)}</span><small>%</small></div><div class="row-meta"><strong class="stat" data-speed>${speed(task).toFixed(1)} MB/s</strong><span class="stat" data-remaining>${remaining(task)}</span></div></div></div><div class="row-meta"><span class="stat" data-bytes>${bytes(task.size * progress(task))} / ${bytes(task.size)}</span><span>8 连接 · 每格代表该段的 1/12</span></div>${connections(task, index)}</article>`;
     }
     function focus(task, index) {
       return `<article class="row" data-row="${index}" data-state="${task.state}" aria-label="${task.name}"><div class="card-head">${file(task)}${action(task, index)}</div><div class="focus-main"><div class="percent stat"><span data-percent>${Math.floor(progress(task) * 100)}</span><small>%</small></div><div class="status-line">${state(task)} <span aria-hidden="true">·</span> <span class="stat" data-remaining>${remaining(task)}</span></div></div>${track(task, index, true)}<div class="row-meta"><span class="stat" data-bytes>${bytes(task.size * progress(task))} / ${bytes(task.size)}</span><strong class="stat" data-speed>${speed(task).toFixed(1)} MB/s</strong></div>${connections(task, index)}</article>`;
@@ -378,11 +372,11 @@
       const total = tasks.reduce((sum, task) => sum + speed(task), 0).toFixed(1);
       return `<div class="frame ${d.className}">
         <header class="intro">
-          <div><div class="eyebrow">${d.number} <span aria-hidden="true">/</span> ${d.name.toUpperCase()}</div><h1>${d.title}</h1><p>${d.description}</p></div>
-          <div class="keys"><div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 切换方案</div><div style="margin-top:7px"><kbd>←</kbd><kbd>→</kbd> 对比 <span aria-hidden="true">·</span> <kbd>R</kbd> 重置</div></div>
+          <div><div class="eyebrow">下载行比较 · ${d.number}/3 · ${d.name}</div><h1>${d.title}</h1><p>${d.description}</p></div>
+          <div class="keys"><div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 切换方案</div><div><kbd>←</kbd><kbd>→</kbd> 对比 <span aria-hidden="true">·</span> <kbd>R</kbd> 重置</div></div>
         </header>
         <section class="window" aria-label="Jisu 下载中心原型">
-          <div class="titlebar"><div class="wordmark">${icon('download')} 极速 <span style="color:var(--muted);font-weight:400">/ Jisu</span></div><span>多线程下载，让等待少一点</span></div>
+          <div class="titlebar"><div class="wordmark">${icon('download')} 极速 <span>Jisu</span></div><span>下载管理</span></div>
           <div class="app">
             <aside class="sidebar" aria-label="界面上下文（静态）">
               <p class="sidebar-label">下载管理</p>
@@ -390,12 +384,12 @@
               <div class="nav-line"><span>下载中</span><span data-count="downloading">${count('downloading')}</span></div>
               <div class="nav-line"><span>已暂停</span><span data-count="paused">${count('paused')}</span></div>
               <div class="nav-line"><span>已完成</span><span data-count="completed">${count('completed')}</span></div>
-              <div class="save-location">默认保存位置<br>~/Downloads<br><br>界面上下文 · 非功能导航</div>
+              <div class="save-location">默认保存位置<code>~/Downloads</code><p>界面上下文 · 非功能导航</p></div>
             </aside>
             <div class="workspace">
               <div class="list-header">
                 <div><h2>全部下载</h2><p>${tasks.length} 个任务 <span aria-hidden="true">·</span> 8 路并行连接</p></div>
-                <div class="total-speed"><strong class="stat" data-total-speed>${total} <span style="font-size:11px;letter-spacing:0">MB/s</span></strong>总下载速度</div>
+                <div class="total-speed"><strong class="stat" data-total-speed>${total} <span class="unit">MB/s</span></strong>总下载速度</div>
               </div>
               <div class="list">${tasks.map(row).join('')}</div>
               <footer class="footer"><span>HTTP Range · 可恢复传输</span><span>模拟数据，不连接下载引擎</span></footer>
@@ -501,7 +495,7 @@
       });
       const total = tasks.reduce((sum, task) => sum + speed(task), 0).toFixed(1);
       const totalEl = stage.querySelector('[data-total-speed]');
-      if (totalEl) totalEl.innerHTML = `${total} <span style="font-size:11px;letter-spacing:0">MB/s</span>`;
+      if (totalEl) totalEl.innerHTML = `${total} <span class="unit">MB/s</span>`;
       stage.querySelectorAll('[data-count]').forEach(el => el.textContent = tasks.filter(task => task.state === el.dataset.count).length);
     }
     stage.addEventListener('click', event => {

@@ -20,6 +20,12 @@ Then open `http://localhost:4173/download-row.html`.
 
 All three share the same realistic tasks and the original renderer's gray/green tokens. Light mode is fixed to keep the comparison about information structure, not theme. The picker follows the plugin's `PICKER.md` specification without product-specific styling. Its CSS and reference wiring are copied verbatim; a strict query validator and Shift-key guard surround that wiring to honor the behavior contract where the reference's `parseInt` and modifier checks are more permissive.
 
+### Unslop direction
+
+The second pass follows [unslop](https://github.com/heydamir/unslop) by Damir Sokolovsky ([@heydamir](https://x.com/heydamir)), licensed under CC BY 4.0. The approved direction is a matter-of-fact, precise, dependable file-transfer utility, not a dashboard showcase. Numbered connection lanes are the signature: the same identifiers appear in Rail, Mosaic, and expanded details. The active transfer carries the green; paused and completed bytes use neutral ink.
+
+The pass replaces slogans with task descriptions, decorative file tiles with consistent line icons, tiny labels with readable 12px metadata, arbitrary gaps with a 4px rhythm, and nested cards with aligned connection lanes. It retains system typography, uses 400/500 weights (600 only for the wordmark), gives the desktop sidebar 240px, and keeps the window proportions driven by the content. Focus uses equal row treatment rather than a decorative first-row border. No image, new feature, or ornamental animation is added. The required picker remains independent harness chrome.
+
 ## Try it
 
 - Click the bottom picker, press `1`–`3`, or use left/right arrows. Selection persists in `?v=1`, `?v=2`, or `?v=3`.
