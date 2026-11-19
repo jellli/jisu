@@ -1,0 +1,19 @@
+# mygo build output and dev bundle
+/build/
+/.mygo/
+mygo_windows_*.syso
+
+# Go
+*.test
+*.out
+/jisu
+/jisu.exe
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# WebView2 bootstrapper that CI downloads into the Windows installer
+/packaging/windows/MicrosoftEdgeWebview2Setup.exe
