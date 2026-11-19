@@ -146,7 +146,23 @@ func (q *Queue) transfer(ctx context.Context, run *attempt, job *record) error {
 		return fmt.Errorf("server returned HTTP %d", resp.StatusCode)
 	}
 	previous := job.Plan
-	if previous == nil || previous.URL != p.URL || previous.Size != p.Size || previous.Validator != p.Validator {
+	restart := previous == nil || previous.URL != p.URL || previous.Size != p.Size || previous.Validator != p.Validator
+	if !restart && len(previous.Ranges) > 0 {
+		info, err := os.Stat(assembly)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		restart = errors.Is(err, os.ErrNotExist)
+		if !restart {
+			for _, r := range previous.Ranges {
+				if info.Size() < r.Next {
+					restart = true
+					break
+				}
+			}
+		}
+	}
+	if restart {
 		if err := clearParts(dir); err != nil {
 			return err
 		}

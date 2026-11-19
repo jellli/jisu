@@ -143,6 +143,48 @@ func TestResumeSegmentsAfterRestart(t *testing.T) {
 	}
 }
 
+func TestResumeWithoutPartialData(t *testing.T) {
+	t.Parallel()
+	for _, missing := range []bool{true, false} {
+		t.Run(fmt.Sprintf("missing=%t", missing), func(t *testing.T) {
+			fixture := newRangeFixture(t)
+			fixture.stall.Store(true)
+			q, state, dir := openTestQueue(t)
+			if err := q.Add(fixture.URL + "/archive.bin"); err != nil {
+				t.Fatal(err)
+			}
+			job := waitJob(t, q, 0, func(j Job) bool { return j.Received == 8*prefixSize })
+			q.Close()
+			assembly := filepath.Join(dir, ".jisu-"+job.ID, "assembled")
+			var err error
+			if missing {
+				err = os.Remove(assembly)
+			} else {
+				err = os.Truncate(assembly, prefixSize)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			fixture.stall.Store(false)
+			fixture.resetStarts()
+			q, err = Open(state, dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(q.Close)
+			waitForState(t, q, 0, Completed)
+			assertOutput(t, q, job.ID, fixture.original)
+			starts := fixture.resetStarts()
+			for i := range 8 {
+				start := int64(i * len(fixture.original) / 8)
+				if !starts[start] {
+					t.Errorf("missing fresh range at %d: %v", start, starts)
+				}
+			}
+		})
+	}
+}
+
 func TestQueuePauseAndChangedFile(t *testing.T) {
 	t.Parallel()
 	fixture := newRangeFixture(t)
