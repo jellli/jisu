@@ -23,4 +23,4 @@ go tool nsgo test
 go tool nsgo test -target macos   # use windows or linux on that host
 ```
 
-The native test starts the same table over real HTTP transfers, waits for partial progress, and tests Shift-click and queue reordering through the context menu. The demo workflow runs it on macOS and Windows and uploads the live and reordered windows. Screenshots are written under `.nsgo/test/screenshots/`. This small workload is a functionality check, not a Windows scrolling CPU benchmark or a comparison against MyGo.
+The native test starts the same table over real HTTP transfers, waits for partial progress, and tests Shift-click, queue reordering through the context menu, and dragging to resize and reorder columns. The demo workflow runs it on macOS and Windows and uploads the captures. Screenshots are written under `.nsgo/test/screenshots/`. This small workload is a functionality check, not a Windows scrolling CPU benchmark or a comparison against MyGo.

@@ -27,12 +27,12 @@ func TestTaskTable(t *testing.T) {
 	}
 	t.Cleanup(closeDemo)
 	app := nsgotest.Start(t, taskTable(q), nsgotest.Size(1040, 570), nsgotest.Idiom(core.IdiomDesktop),
-		nsgotest.Environment(core.Environment{OS: core.OSLinux}))
+		nsgotest.Environment(core.Environment{OS: core.OSLinux}), nsgotest.Measure())
 	second := "text:Design Assets.zip"
 	third := "text:Workshop Recording.mp4"
 	app.WaitFor(second, 5*time.Second)
 	if nsgotest.Target() != "" {
-		app.WaitFor("id:tasks >> text:/^[1-9][0-9]?%$/ >> nth=0", 12*time.Second)
+		app.WaitFor("id:tasks >> text:/^[1-9][0-9]%$/ >> nth=0", 12*time.Second)
 		app.Screenshot("download-tasks-live")
 	}
 
@@ -52,5 +52,16 @@ func TestTaskTable(t *testing.T) {
 
 	if nsgotest.Target() != "" {
 		app.Screenshot("download-tasks-reordered")
+		size := "role:columnheader Size"
+		before := app.Find(size).Bounds()
+		app.Drag("id:resize:size", core.Point{X: 12}, core.Point{X: 35})
+		if after := app.Find(size).Bounds(); after.Size.Width <= before.Size.Width {
+			t.Fatalf("column width did not increase: before %v, after %v", before, after)
+		}
+		app.Drag(size, core.Point{X: -20}, core.Point{X: -230})
+		if after := app.Find(size).Bounds(); after.Origin.X >= app.Find("role:columnheader File name").Bounds().Origin.X {
+			t.Fatalf("Size column did not move ahead of File name: %v", after)
+		}
+		app.Screenshot("download-tasks-columns")
 	}
 }
