@@ -10,6 +10,7 @@
     remove: (id) => native.call("Jisu.Remove", id),
     reveal: (id) => native.call("Jisu.Reveal", id),
     chooseDirectory: async () => (await native.call("Jisu.ChooseDirectory")) || null,
+    setConnections: (count) => native.call("Jisu.SetConnections", count),
     setConcurrency: (count) => native.call("Jisu.SetConcurrency", count),
     onState: (callback) => native.on("jisu:state", callback),
   });

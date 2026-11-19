@@ -41,6 +41,7 @@ type Snapshot struct {
 	Jobs              []Job  `json:"jobs"`
 	DownloadDirectory string `json:"downloadDirectory"`
 	Concurrency       int    `json:"concurrency"`
+	Connections       int    `json:"connections"`
 }
 
 type record struct {
@@ -53,9 +54,11 @@ type config struct {
 	Jobs        []*record `json:"jobs"`
 	Directory   string    `json:"directory"`
 	Concurrency int       `json:"concurrency"`
+	Connections int       `json:"connections"`
 }
 
 type attempt struct {
+	changed chan struct{}
 	cancel  context.CancelFunc
 	started time.Time
 	base    int64
@@ -84,7 +87,10 @@ func Open(stateFile, directory string) (*Queue, error) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
-	if !filepath.IsAbs(q.config.Directory) || q.config.Concurrency < 1 || q.config.Concurrency > 5 {
+	if q.config.Connections == 0 {
+		q.config.Connections = 8
+	}
+	if !validConnections(q.config.Connections) || !filepath.IsAbs(q.config.Directory) || q.config.Concurrency < 1 || q.config.Concurrency > 5 {
 		return nil, errors.New("invalid saved download settings")
 	}
 	for _, job := range q.config.Jobs {
@@ -119,7 +125,7 @@ func (q *Queue) Close() {
 func (q *Queue) State() Snapshot {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	state := Snapshot{Jobs: make([]Job, 0, len(q.config.Jobs)), DownloadDirectory: q.config.Directory, Concurrency: q.config.Concurrency}
+	state := Snapshot{Jobs: make([]Job, 0, len(q.config.Jobs)), DownloadDirectory: q.config.Directory, Concurrency: q.config.Concurrency, Connections: q.config.Connections}
 	for _, job := range q.config.Jobs {
 		view := job.Job
 		if run := q.active[job.ID]; run != nil && view.State == Downloading {
@@ -246,6 +252,29 @@ func (q *Queue) SetConcurrency(value int) error {
 	return nil
 }
 
+func validConnections(n int) bool { return n == 4 || n == 8 || n == 16 || n == 32 }
+
+func (q *Queue) SetConnections(n int) error {
+	if !validConnections(n) {
+		return errors.New("select 4, 8, 16 or 32 connections")
+	}
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	old := q.config.Connections
+	q.config.Connections = n
+	if err := q.saveLocked(); err != nil {
+		q.config.Connections = old
+		return err
+	}
+	for _, run := range q.active {
+		select {
+		case run.changed <- struct{}{}:
+		default:
+		}
+	}
+	return nil
+}
+
 func (q *Queue) findLocked(id string) *record {
 	for _, job := range q.config.Jobs {
 		if job.ID == id {
@@ -267,7 +296,7 @@ func (q *Queue) scheduleLocked() {
 			continue
 		}
 		ctx, cancel := context.WithCancel(context.Background())
-		run := &attempt{cancel: cancel, started: time.Now(), base: job.Received}
+		run := &attempt{cancel: cancel, started: time.Now(), base: job.Received, changed: make(chan struct{}, 1)}
 		job.State = Downloading
 		q.active[job.ID] = run
 		q.workers.Go(func() { q.run(ctx, run, job) })

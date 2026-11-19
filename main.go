@@ -26,6 +26,8 @@ func (s service) Add(url string) error           { return s.queue.Add(url) }
 func (s service) Pause(id string) error          { return s.queue.Pause(id) }
 func (s service) Resume(id string) error         { return s.queue.Resume(id) }
 func (s service) Remove(id string) error         { return s.queue.Remove(id) }
+func (s service) SetConnections(value int) error { return s.queue.SetConnections(value) }
+
 func (s service) SetConcurrency(value int) error { return s.queue.SetConcurrency(value) }
 
 func (s service) ChooseDirectory(ctx context.Context) (*string, error) {
