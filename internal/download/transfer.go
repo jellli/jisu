@@ -335,6 +335,9 @@ func (q *Queue) downloadRanges(ctx context.Context, run *attempt, job *record, f
 		saved.Ranges = make([]byteRange, len(ranges))
 		for i, r := range ranges {
 			saved.Ranges[i] = r.byteRange
+			if r.busy && r.Next > r.End {
+				saved.Ranges[i].Next = r.End
+			}
 		}
 		job.Plan = &saved
 		return q.saveLocked()

@@ -45,6 +45,46 @@ func TestMigrationCopyCancellation(t *testing.T) {
 	}
 }
 
+func TestCheckpointBeforeRangeEOF(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("ETag", `"stable"`)
+		if r.Header.Get("Range") == "bytes=0-0" {
+			w.Header().Set("Content-Range", "bytes 0-0/4")
+			w.WriteHeader(http.StatusPartialContent)
+			fmt.Fprint(w, "a")
+			return
+		}
+		w.Header().Set("Content-Range", "bytes 0-3/4")
+		w.WriteHeader(http.StatusPartialContent)
+		fmt.Fprint(w, "abcd")
+		_ = http.NewResponseController(w).Flush()
+		<-r.Context().Done()
+	}))
+	t.Cleanup(server.Close)
+	q, state, _ := openTestQueue(t)
+	if err := q.Add(server.URL + "/pending.bin"); err != nil {
+		t.Fatal(err)
+	}
+	waitJob(t, q, 0, func(j Job) bool { return j.Received == 4 })
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		data, err := os.ReadFile(state)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var saved config
+		if err := json.Unmarshal(data, &saved); err != nil {
+			t.Fatal(err)
+		}
+		if p := saved.Jobs[0].Plan; p != nil && p.Ranges[0].Next == 3 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("checkpoint did not leave the unverified final byte resumable")
+}
+
 func TestLiveConnections(t *testing.T) {
 	t.Parallel()
 	fixture := newRangeFixture(t)
