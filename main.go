@@ -121,10 +121,15 @@ func run() error {
 		window = mygo.NewWindow(mygo.WindowOptions{
 			Title: "jisu", Width: 1000, Height: 660, MinWidth: 720, MinHeight: 500,
 		})
-		window.Page().OnWillNavigate(func(e *mygo.NavigateEvent) { e.PreventDefault() })
-		window.Page().SetWindowOpenHandler(func(mygo.WindowOpenRequest) *mygo.WindowOptions { return nil })
-		window.Page().OnWillDownload(func(e *mygo.DownloadEvent) { e.PreventDefault() })
-		window.LoadURL("/")
+		page := window.Page()
+		page.OnWillNavigate(func(e *mygo.NavigateEvent) { e.PreventDefault() })
+		page.SetWindowOpenHandler(func(mygo.WindowOpenRequest) *mygo.WindowOptions { return nil })
+		page.OnWillDownload(func(e *mygo.DownloadEvent) { e.PreventDefault() })
+		if err := page.LoadURL("/"); err != nil {
+			startupErr = err
+			mygo.App.Quit()
+			return
+		}
 		go publishState(ctx, window, queue)
 	})
 	if err := mygo.App.Run(); err != nil {
