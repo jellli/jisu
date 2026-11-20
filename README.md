@@ -50,6 +50,14 @@ xattr -cr /Applications/jisu.app
 2. If a blue SmartScreen window says "Windows protected your PC", click **More info**.
 3. Click **Run anyway**, then follow the installer.
 
+## Updates
+
+In **设置**, **检查更新** checks for a new version; the dialog also shows the current version. Release builds check daily in the background using Sparkle on macOS and WinSparkle on Windows. Their native dialogs handle confirmation, download progress, installation and restart. Updates download full packages, not deltas, and verify their EdDSA signatures before installing.
+
+**v0.2.0 has no updater. Install the next release manually once**, using the steps above. After that, updates are available in the app. Initial downloads still have the unsigned-build warnings described above. macOS packages are ad hoc signed, without Developer ID or notarization; NSGo documents successful Sparkle updates with ad hoc signing.
+
+Release maintainers must set the GitHub Actions secret `NSGO_UPDATES_KEY` to the secret matching `updates.key` in `nsgo.yaml`. Keep a safe backup: changing the public key prevents existing installations from trusting new updates. Every release must include `appcast-windows_x64.xml`, `appcast-macos_arm64.xml` and `appcast-macos_x64.xml` alongside the installers and `SHA256SUMS`. The default feed reads the latest release, so a missing appcast breaks checks for that target. Pull requests without the signing secret can still build unsigned test artifacts; tagged releases require all signed appcasts.
+
 ## Download files
 
 Paste a direct `https://` or `http://` download URL. jisu defaults to eight connections per job for files 4 MiB or larger when the server supports byte ranges and provides a reliable file validator. To change one job's connection target while it runs, select the job, open Details, and choose 4, 8, 16 or 32. Use the sidebar to filter by file type or queue, and right-click a selection to move it up or down within its queue.

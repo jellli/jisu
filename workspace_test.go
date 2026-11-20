@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -68,6 +69,44 @@ func TestSelectingCustomProxyDoesNotApply(t *testing.T) {
 	app.WaitForGone("id:settings-dialog >> text:/proxy URL must use/", time.Second)
 	app.Press("id:apply-proxy")
 	app.WaitFor("id:settings-dialog >> text:/proxy URL must use/", time.Second)
+}
+
+func TestWorkspaceUpdateCheck(t *testing.T) {
+	if nsgotest.Target() != "" {
+		t.Skip("update responses are simulated only by the headless driver")
+	}
+	for _, tc := range []struct {
+		name   string
+		found  core.UpdateCheck
+		alerts int
+	}{
+		{"newer", core.UpdateCheck{App: "jisu", Current: "0.2.0", Version: "0.3.0", URL: "https://example.com/release"}, 1},
+		{"current", core.UpdateCheck{App: "jisu", Current: "0.2.0"}, 1},
+		{"offline", core.UpdateCheck{Err: errors.New("offline")}, 1},
+		{"native dialog", core.UpdateCheck{Shown: true}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			queue, err := download.Open(filepath.Join(dir, "queue.json"), dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(queue.Close)
+			app := nsgotest.Start(t, workspace(queue), nsgotest.Size(1100, 680))
+			app.Update = func(bool) core.UpdateCheck { return tc.found }
+			app.Press("id:settings")
+			if len(app.Query("text:"+versionCaption())) != 1 {
+				t.Fatal("current version is missing")
+			}
+			app.Press("id:check-update")
+			if !slices.Equal(app.UpdateChecks, []bool{false}) {
+				t.Fatalf("checks %v", app.UpdateChecks)
+			}
+			if alerts := app.Alerts(); len(alerts) != tc.alerts {
+				t.Fatalf("alerts %+v", alerts)
+			}
+		})
+	}
 }
 
 func TestSegmentFillShowsNoncontiguousBytes(t *testing.T) {
