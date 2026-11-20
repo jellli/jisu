@@ -47,6 +47,7 @@ func TestTakeoverHeaders(t *testing.T) {
 		t.Fatal("expected segmented requests")
 	}
 }
+
 func TestInvalidRequestOptions(t *testing.T) {
 	for _, v := range []string{"secret\r\nx", "x\x00", "x\x7f", strings.Repeat("x", 16385)} {
 		o := RequestOptions{Cookie: v}
@@ -65,6 +66,7 @@ func TestInvalidRequestOptions(t *testing.T) {
 		t.Fatal("empty options rejected")
 	}
 }
+
 func TestRedirectCredentials(t *testing.T) {
 	for _, downgrade := range []bool{false, true} {
 		t.Run(map[bool]string{false: "cross-host", true: "downgrade"}[downgrade], func(t *testing.T) {

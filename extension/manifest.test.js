@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash, createPublicKey} from 'node:crypto';
+
 test('stable RSA extension identity matches native host', () => {
   const m = JSON.parse(readFileSync(new URL('./manifest.json', import.meta.url)));
   const der = Buffer.from(m.key, 'base64');

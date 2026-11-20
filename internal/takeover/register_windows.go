@@ -20,4 +20,7 @@ func registerRegistry(root registry.Key, base, path string) error {
 	}
 	return nil
 }
-func registerPlatform(path string) error { return registerRegistry(registry.CURRENT_USER, "", path) }
+
+func registerPlatform(path string) error {
+	return registerRegistry(registry.CURRENT_USER, "", path)
+}

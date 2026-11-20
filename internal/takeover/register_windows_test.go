@@ -2,9 +2,10 @@ package takeover
 
 import (
 	"fmt"
-	"golang.org/x/sys/windows/registry"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/windows/registry"
 )
 
 func TestWindowsRegistry(t *testing.T) {

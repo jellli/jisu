@@ -1,5 +1,7 @@
 # jisu
 
+jisu is a desktop download manager for Windows and macOS, built with Go and [NSGo](https://github.com/nsgo-dev/nsgo).
+
 ## Browser Takeover
 
 Open jisu once to register its native messaging host for Chrome and Edge. Keep the app installed at the same path, and open it again after moving it.
@@ -7,8 +9,6 @@ Open jisu once to register its native messaging host for Chrome and Edge. Keep t
 Download the extension artifact or use this repository's `extension/` directory. Unzip the artifact first. Open `chrome://extensions` or `edge://extensions`, enable Developer mode, choose **Load unpacked**, and select that directory. No extension build step is needed.
 
 Takeover hands files of at least 5 MB and common archives, video and installers to jisu. Hold Alt while starting a download to skip Takeover. If jisu is unavailable the browser download resumes. Page cookies are used only in memory; authenticated Jobs may need a new Takeover after restarting jisu.
-
-jisu is a desktop download manager for Windows and macOS, built with Go and [NSGo](https://github.com/nsgo-dev/nsgo).
 
 ## Install
 

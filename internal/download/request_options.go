@@ -35,10 +35,14 @@ func (o *RequestOptions) validate() error {
 }
 
 func (o RequestOptions) apply(req *http.Request) {
-	req.Header.Set("Cookie", o.Cookie)
-	req.Header.Set("User-Agent", o.UserAgent)
+	if o.Cookie != "" {
+		req.Header.Set("Cookie", o.Cookie)
+	}
+	if o.UserAgent != "" {
+		req.Header.Set("User-Agent", o.UserAgent)
+	}
 	u, _ := url.Parse(o.Referer)
-	if u != nil && !(u.Scheme == "https" && req.URL.Scheme == "http") {
+	if o.Referer != "" && u != nil && !(u.Scheme == "https" && req.URL.Scheme == "http") {
 		req.Header.Set("Referer", o.Referer)
 	}
 }

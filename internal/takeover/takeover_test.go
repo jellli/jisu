@@ -4,15 +4,17 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
-	"github.com/jellli/jisu/internal/download"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jellli/jisu/internal/download"
 )
 
 func TestFraming(t *testing.T) {
@@ -32,6 +34,7 @@ func TestFraming(t *testing.T) {
 		t.Fatal("empty frame")
 	}
 }
+
 func TestEndpointAndChain(t *testing.T) {
 	config := t.TempDir()
 	q, err := download.Open(filepath.Join(config, "queue.json"), t.TempDir())
@@ -73,7 +76,10 @@ func TestEndpointAndChain(t *testing.T) {
 	defer server.Close()
 	var input, output bytes.Buffer
 	WriteFrame(&input, Message{URL: server.URL + "/file.zip", Cookies: "session=ok"})
-	if err := RunHost(&input, &output, config, func() error { t.Fatal("unexpected launch"); return nil }); err != nil {
+	if err := RunHost(&input, &output, config, func() error {
+		t.Fatal("unexpected launch")
+		return nil
+	}); err != nil {
 		t.Fatal(err)
 	}
 	var reply Reply
@@ -104,9 +110,20 @@ func TestEndpointAndChain(t *testing.T) {
 	}
 	t.Fatal("Job did not complete")
 }
+
 func TestManifest(t *testing.T) {
 	for platform, count := range map[string]int{"darwin": 2, "windows": 1, "linux": 3} {
-		paths := ManifestPaths(platform, t.TempDir(), t.TempDir())
+		home, config := t.TempDir(), t.TempDir()
+		paths := ManifestPaths(platform, home, config)
+		if platform != "windows" && len(paths) != 0 {
+			t.Fatal("manifests for missing browsers", paths)
+		}
+		for _, root := range browserTestRoots(platform, home) {
+			if err := os.MkdirAll(root, 0700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		paths = ManifestPaths(platform, home, config)
 		if len(paths) != count {
 			t.Fatal(paths)
 		}
@@ -117,6 +134,11 @@ func TestManifest(t *testing.T) {
 		}
 	}
 	home, config := t.TempDir(), t.TempDir()
+	for _, root := range browserTestRoots(runtime.GOOS, home) {
+		if err := os.MkdirAll(root, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := register(home, config, func(path string) error {
 		b, err := os.ReadFile(path)
 		if err != nil {
@@ -132,5 +154,99 @@ func TestManifest(t *testing.T) {
 		return nil
 	}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func browserTestRoots(platform, home string) []string {
+	switch platform {
+	case "darwin":
+		return []string{
+			filepath.Join(home, "Library", "Application Support", "Google", "Chrome"),
+			filepath.Join(home, "Library", "Application Support", "Microsoft Edge"),
+		}
+	case "windows":
+		return nil
+	default:
+		return []string{
+			filepath.Join(home, ".config", "google-chrome"),
+			filepath.Join(home, ".config", "chromium"),
+			filepath.Join(home, ".config", "microsoft-edge"),
+		}
+	}
+}
+
+func TestEndpointCloseOwnership(t *testing.T) {
+	for _, replacement := range []string{"", "second-instance", "invalid-json", "missing"} {
+		t.Run(replacement, func(t *testing.T) {
+			config := t.TempDir()
+			e, err := Start(config, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer e.Close()
+			switch replacement {
+			case "second-instance":
+				err = atomicJSON(e.file, discovery{Port: 1234, Token: replacement})
+			case "invalid-json":
+				err = os.WriteFile(e.file, []byte("{"), 0600)
+			case "missing":
+				err = os.Remove(e.file)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := e.Close(); err != nil {
+				t.Fatal(err)
+			}
+			_, err = os.Stat(e.file)
+			wantRemoved := replacement == "" || replacement == "missing"
+			if wantRemoved != os.IsNotExist(err) {
+				t.Fatalf("discovery file state: %v", err)
+			}
+		})
+	}
+}
+
+func TestLaunchCommand(t *testing.T) {
+	for _, tc := range []struct {
+		platform, executable, command string
+		args                          []string
+	}{
+		{"darwin", "/Applications/jisu.app/Contents/MacOS/jisu", "/usr/bin/open", []string{"/Applications/jisu.app"}},
+		{"darwin", "/Applications/My jisu.app/Contents/MacOS/jisu", "/usr/bin/open", []string{"/Applications/My jisu.app"}},
+		{"darwin", "/usr/local/bin/jisu", "/usr/local/bin/jisu", nil},
+		{"linux", "/opt/jisu.app/Contents/MacOS/jisu", "/opt/jisu.app/Contents/MacOS/jisu", nil},
+	} {
+		tc.executable = filepath.FromSlash(tc.executable)
+		if tc.command != "/usr/bin/open" {
+			tc.command = filepath.FromSlash(tc.command)
+		}
+		for i := range tc.args {
+			tc.args[i] = filepath.FromSlash(tc.args[i])
+		}
+		cmd := launchCommand(tc.platform, tc.executable)
+		if cmd.Path != tc.command || strings.Join(cmd.Args[1:], "|") != strings.Join(tc.args, "|") {
+			t.Fatalf("launch command: %v", cmd.Args)
+		}
+	}
+}
+
+func TestManifestSkipsMissingBrowserRoots(t *testing.T) {
+	for _, platform := range []string{"darwin", "linux"} {
+		home := t.TempDir()
+		roots := browserTestRoots(platform, home)
+		if err := os.MkdirAll(roots[0], 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Dir(roots[1]), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(roots[1], nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+		paths := ManifestPaths(platform, home, t.TempDir())
+		if len(paths) != 1 || paths[0] != filepath.Join(roots[0], "NativeMessagingHosts", HostName+".json") {
+			t.Fatal("unexpected browser manifests", paths)
+		}
 	}
 }

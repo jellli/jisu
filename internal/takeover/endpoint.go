@@ -23,17 +23,21 @@ type Message struct {
 	UserAgent string `json:"userAgent"`
 	Filename  string `json:"filename,omitempty"`
 }
+
 type Reply struct {
 	OK    bool   `json:"ok"`
 	Error string `json:"error,omitempty"`
 }
+
 type discovery struct {
 	Port  int    `json:"port"`
 	Token string `json:"token"`
 }
+
 type Endpoint struct {
 	server *http.Server
 	file   string
+	token  string
 }
 
 func atomicJSON(file string, v any) error {
@@ -69,8 +73,13 @@ func Start(config string, q *download.Queue) (*Endpoint, error) {
 		return nil, err
 	}
 	d := discovery{listener.Addr().(*net.TCPAddr).Port, hex.EncodeToString(secret[:])}
-	e := &Endpoint{file: filepath.Join(config, "jisu", "takeover.json")}
-	e.server = &http.Server{Handler: handler(d.Token, q), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second}
+	e := &Endpoint{file: filepath.Join(config, "jisu", "takeover.json"), token: d.Token}
+	e.server = &http.Server{
+		Handler:           handler(d.Token, q),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+	}
 	if err = atomicJSON(e.file, d); err != nil {
 		listener.Close()
 		return nil, err
@@ -78,7 +87,17 @@ func Start(config string, q *download.Queue) (*Endpoint, error) {
 	go e.server.Serve(listener)
 	return e, nil
 }
-func (e *Endpoint) Close() error { err := e.server.Close(); os.Remove(e.file); return err }
+
+func (e *Endpoint) Close() error {
+	err := e.server.Close()
+	data, readErr := os.ReadFile(e.file)
+	var current discovery
+	if readErr == nil && json.Unmarshal(data, &current) == nil && current.Token == e.token {
+		os.Remove(e.file)
+	}
+	return err
+}
+
 func handler(token string, q *download.Queue) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

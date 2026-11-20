@@ -11,6 +11,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"time"
 )
 
@@ -28,6 +30,7 @@ func ReadFrame(r io.Reader, v any) error {
 	}
 	return json.Unmarshal(b, v)
 }
+
 func WriteFrame(w io.Writer, v any) error {
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -39,6 +42,7 @@ func WriteFrame(w io.Writer, v any) error {
 	_, err = w.Write(b)
 	return err
 }
+
 func RunHost(r io.Reader, w io.Writer, config string, start func() error) error {
 	for {
 		var m Message
@@ -54,10 +58,17 @@ func RunHost(r io.Reader, w io.Writer, config string, start func() error) error 
 		}
 	}
 }
+
 func forward(config string, m Message, start func() error) Reply {
 	deadline := time.Now().Add(10 * time.Second)
 	started := false
-	client := &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	client := &http.Client{
+		Timeout:   2 * time.Second,
+		Transport: &http.Transport{Proxy: nil},
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	defer client.CloseIdleConnections()
 	for {
 		data, err := os.ReadFile(filepath.Join(config, "jisu", "takeover.json"))
@@ -93,14 +104,26 @@ func forward(config string, m Message, start func() error) Reply {
 		time.Sleep(100 * time.Millisecond)
 	}
 }
+
+func launchCommand(platform, executable string) *exec.Cmd {
+	if platform == "darwin" {
+		macOS := filepath.Dir(executable)
+		contents := filepath.Dir(macOS)
+		bundle := filepath.Dir(contents)
+		if filepath.Base(macOS) == "MacOS" && filepath.Base(contents) == "Contents" && strings.HasSuffix(bundle, ".app") {
+			return exec.Command("/usr/bin/open", bundle)
+		}
+	}
+	return exec.Command(executable)
+}
+
 func StartApp() error {
 	executable, err := os.Executable()
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command(executable)
-	detach(cmd)
-	if err = cmd.Start(); err != nil {
+	cmd := launchCommand(runtime.GOOS, executable)
+	if err = startDetached(cmd); err != nil {
 		return err
 	}
 	return cmd.Process.Release()
