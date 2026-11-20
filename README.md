@@ -25,7 +25,7 @@ Pause jobs or change the number of simultaneous downloads in settings. Interrupt
 
 If a server doesn't support safe resume or has changed the file, jisu starts that download from the beginning. Completed files never overwrite existing files. Partial data lives in a hidden `.jisu-*` folder in the destination directory and is removed on completion or when you remove an unfinished job. Save to a local filesystem that supports hard links, such as APFS or NTFS. Removing a completed job only removes its history entry.
 
-The first release handles direct URLs, not browser capture, authenticated browser sessions, or video playlists.
+Takeover does not carry over an authenticated browser session; for sites that need one, see [Browser Takeover](#browser-takeover). Video playlists are not supported.
 
 ## Develop
 
