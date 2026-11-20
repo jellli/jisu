@@ -1,3 +1,13 @@
+## Highlights
+
+- **Proxy settings:** Choose System, None (direct), or Custom for downloads in Settings. Custom proxies support HTTP, HTTPS, and SOCKS5, and changes apply to new requests without restarting jisu. ([#18](https://github.com/jellli/jisu/pull/18))
+- **System proxy support:** The default System mode now uses macOS and Windows system proxy settings when proxy environment variables are not set. This works with Clash when it enables the system proxy. ([#19](https://github.com/jellli/jisu/pull/19))
+- **In-app updates:** Open Settings (设置) and choose Check for Updates (检查更新) to check for signed updates. jisu also checks daily in the background on macOS and Windows. ([#20](https://github.com/jellli/jisu/pull/20))
+
+**Upgrading from v0.2.0?** That version has no updater. Download and install v<version> manually using the guide below. After that, you can update from within jisu.
+
+## Install
+
 Download **one** file:
 
 | Your computer | File |
