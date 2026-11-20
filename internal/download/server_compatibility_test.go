@@ -47,6 +47,7 @@ func TestSegmentHTTPError(t *testing.T) {
 			}))
 			defer server.Close()
 			q, _, _ := openTestQueue(t)
+			q.retryDelay = func(int) time.Duration { return time.Millisecond }
 			if err := q.Add(server.URL); err != nil {
 				t.Fatal(err)
 			}
@@ -59,7 +60,11 @@ func TestSegmentHTTPError(t *testing.T) {
 			if job.State != Failed {
 				t.Fatalf("job did not fail: %+v", job)
 			}
-			if want := fmt.Sprintf("server returned HTTP %d", status); job.Error != want {
+			want := fmt.Sprintf("server returned HTTP %d", status)
+			if status == http.StatusTooManyRequests || status == http.StatusServiceUnavailable {
+				want += fmt.Sprintf(" after %d throttle retries", maxThrottleRetries)
+			}
+			if job.Error != want {
 				t.Fatalf("error = %q, want %q", job.Error, want)
 			}
 		})

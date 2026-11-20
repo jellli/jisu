@@ -72,13 +72,14 @@ type attempt struct {
 }
 
 type Queue struct {
-	mu      sync.Mutex
-	workers sync.WaitGroup
-	config  config
-	active  map[string]*attempt
-	file    string
-	client  *http.Client
-	closed  bool
+	mu         sync.Mutex
+	workers    sync.WaitGroup
+	config     config
+	active     map[string]*attempt
+	file       string
+	client     *http.Client
+	closed     bool
+	retryDelay func(int) time.Duration
 }
 
 func Open(stateFile, directory string) (*Queue, error) {
