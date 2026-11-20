@@ -52,7 +52,16 @@ func localProxyHost(host string) bool {
 }
 
 func (p systemProxyConfig) forURL(u *url.URL) *url.URL {
-	if proxyBypassed(u.Hostname(), p.exceptions, p.excludeSimple) {
+	port := u.Port()
+	if port == "" {
+		switch u.Scheme {
+		case "http":
+			port = "80"
+		case "https":
+			port = "443"
+		}
+	}
+	if proxyBypassed(u.Hostname(), port, p.exceptions, p.excludeSimple) {
 		return nil
 	}
 	switch u.Scheme {
@@ -70,13 +79,19 @@ func (p systemProxyConfig) forURL(u *url.URL) *url.URL {
 	return p.socks
 }
 
-func proxyBypassed(host string, exceptions []string, excludeSimple bool) bool {
+func proxyBypassed(host, port string, exceptions []string, excludeSimple bool) bool {
 	host = strings.TrimSuffix(strings.ToLower(host), ".")
 	if localProxyHost(host) || (excludeSimple && !strings.ContainsAny(host, ".:") && net.ParseIP(host) == nil) {
 		return true
 	}
 	for _, exception := range exceptions {
 		rule := strings.ToLower(strings.TrimSpace(exception))
+		if ruleHost, rulePort, err := net.SplitHostPort(rule); err == nil {
+			if rulePort != port {
+				continue
+			}
+			rule = ruleHost
+		}
 		if rule == "<local>" && !strings.ContainsAny(host, ".:") && net.ParseIP(host) == nil {
 			return true
 		}

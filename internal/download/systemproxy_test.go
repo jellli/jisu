@@ -121,7 +121,7 @@ func TestWindowsProxy(t *testing.T) {
 		if proxyString(p.http) != tc.http || proxyString(p.https) != tc.https || proxyString(p.socks) != tc.socks {
 			t.Errorf("%q: %+v", tc.server, p)
 		}
-		if !proxyBypassed("intranet", p.exceptions, p.excludeSimple) || !proxyBypassed("a.example.com", p.exceptions, false) {
+		if !proxyBypassed("intranet", "", p.exceptions, p.excludeSimple) || !proxyBypassed("a.example.com", "", p.exceptions, false) {
 			t.Fatal("missing Windows override")
 		}
 		if p := parseWindowsProxy(false, tc.server, ""); p.http != nil || p.https != nil || p.socks != nil {
@@ -150,8 +150,32 @@ func TestProxyBypass(t *testing.T) {
 		{"10.2.3.4", "10.0.0.0/8", false, true}, {"fe80::1234", "fe80::/10", false, true},
 		{"remote.test", "bad[/bad", false, false}, {"remote.test", "", false, false},
 	} {
-		if got := proxyBypassed(tc.host, []string{tc.rule}, tc.simple); got != tc.want {
+		if got := proxyBypassed(tc.host, "", []string{tc.rule}, tc.simple); got != tc.want {
 			t.Errorf("%+v: got %v", tc, got)
+		}
+	}
+}
+
+func TestSystemProxyPortBypass(t *testing.T) {
+	p := parseWindowsProxy(true, "proxy.test:80", "files.example.com:8443;*.corp:8443;default-http.test:80;default-https.test:443;[2001:db8::1]:8443")
+	for raw, bypass := range map[string]bool{
+		"https://files.example.com:8443/file": true,
+		"https://files.example.com/file":      false,
+		"http://files.example.com/file":       false,
+		"https://other.example.com:8443/file": false,
+		"https://files.corp:8443/file":        true,
+		"https://files.corp:9443/file":        false,
+		"http://default-http.test/file":       true,
+		"https://default-http.test/file":      false,
+		"https://default-https.test/file":     true,
+		"http://default-https.test/file":      false,
+		"https://[2001:db8::1]:8443/file":     true,
+		"https://[2001:db8::1]/file":          false,
+	} {
+		u, _ := url.Parse(raw)
+		got := p.forURL(u)
+		if (got == nil) != bypass {
+			t.Errorf("%s: proxy = %v, want bypass %v", raw, got, bypass)
 		}
 	}
 }
