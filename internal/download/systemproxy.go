@@ -85,12 +85,9 @@ func proxyBypassed(host, port string, exceptions []string, excludeSimple bool) b
 		return true
 	}
 	for _, exception := range exceptions {
-		rule := strings.ToLower(strings.TrimSpace(exception))
-		if ruleHost, rulePort, err := net.SplitHostPort(rule); err == nil {
-			if rulePort != port {
-				continue
-			}
-			rule = ruleHost
+		rule, rulePort := splitProxyBypassPort(strings.ToLower(strings.TrimSpace(exception)))
+		if rulePort != "" && rulePort != port {
+			continue
 		}
 		if rule == "<local>" && !strings.ContainsAny(host, ".:") && net.ParseIP(host) == nil {
 			return true
@@ -116,6 +113,26 @@ func proxyBypassed(host, port string, exceptions []string, excludeSimple bool) b
 		}
 	}
 	return false
+}
+
+func splitProxyBypassPort(rule string) (string, string) {
+	i := strings.LastIndexByte(rule, ':')
+	if i < 0 || i == len(rule)-1 {
+		return rule, ""
+	}
+	host, port := rule[:i], rule[i+1:]
+	for _, digit := range port {
+		if digit < '0' || digit > '9' {
+			return rule, ""
+		}
+	}
+	if !strings.Contains(host, ":") {
+		return host, port
+	}
+	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") && net.ParseIP(host[1:len(host)-1]) != nil {
+		return host[1 : len(host)-1], port
+	}
+	return rule, ""
 }
 
 func proxyEndpoint(raw, scheme string) *url.URL {

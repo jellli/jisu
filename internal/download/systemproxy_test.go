@@ -180,6 +180,27 @@ func TestSystemProxyPortBypass(t *testing.T) {
 	}
 }
 
+func TestSystemProxyIPv6Bypass(t *testing.T) {
+	for _, tc := range []struct {
+		rule, rawURL string
+		bypass       bool
+	}{
+		{"fd12:*", "https://[fd12::1]/file", true},
+		{"fd12:*", "https://[fd12::1]:8443/file", true},
+		{"fd12:*", "https://[fd13::1]/file", false},
+		{"[fd12::1]:8443", "https://[fd12::1]:8443/file", true},
+		{"[fd12::1]:8443", "https://[fd12::1]/file", false},
+		{"[fd12::1]:8443", "https://[fd12::2]:8443/file", false},
+		{"fd12::8443", "https://[fd12::8443]/file", true},
+	} {
+		p := parseWindowsProxy(true, "proxy.test:80", tc.rule)
+		u, _ := url.Parse(tc.rawURL)
+		if got := p.forURL(u); (got == nil) != tc.bypass {
+			t.Errorf("rule %q, URL %s: proxy = %v, want bypass %v", tc.rule, tc.rawURL, got, tc.bypass)
+		}
+	}
+}
+
 func TestProxyEnvironmentPrecedence(t *testing.T) {
 	req, _ := http.NewRequest("GET", "https://github.com", nil)
 	sentinel := errors.New("environment result")
