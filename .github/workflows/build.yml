@@ -104,11 +104,13 @@ jobs:
             target: windows_x64
             artifact: jisu-windows-x64
             installers: windows-x64-setup.exe
+            appcasts: appcast-windows_x64.xml
           - name: macOS
             os: macos-latest
             target: macos_arm64,macos_x64
             artifact: jisu-macos
             installers: macos-arm64.dmg macos-x64.dmg
+            appcasts: appcast-macos_arm64.xml appcast-macos_x64.xml
     steps:
       - uses: actions/checkout@v7
         with:
@@ -134,10 +136,13 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
       - name: Build
+        env:
+          NSGO_UPDATES_KEY: ${{ secrets.NSGO_UPDATES_KEY }}
         run: go tool nsgo build -target "${{ matrix.target }}"
       - name: Collect the installers
         env:
           INSTALLERS: ${{ matrix.installers }}
+          APPCASTS: ${{ matrix.appcasts }}
         run: |
           version=$(awk '$1 == "version:" {print $2}' nsgo.yaml)
           mkdir -p upload
@@ -149,6 +154,15 @@ jobs:
               exit 1
             fi
             cp "$f" upload/
+          done
+          for appcast in $APPCASTS; do
+            f="dist/releases/$appcast"
+            if [ -f "$f" ]; then
+              cp "$f" upload/
+            elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+              echo "::error::missing signed appcast $f; configure NSGO_UPDATES_KEY"
+              exit 1
+            fi
           done
           ls -l upload
       - uses: actions/upload-artifact@v7
@@ -177,10 +191,10 @@ jobs:
           pattern: jisu-*
           path: dist
           merge-multiple: true
-      - name: Check every platform's installer is there
+      - name: Check every platform's installer and appcast are there
         run: |
           version=${GITHUB_REF_NAME#v}
-          for f in "jisu-$version-windows-x64-setup.exe" "jisu-$version-macos-arm64.dmg" "jisu-$version-macos-x64.dmg"; do
+          for f in "jisu-$version-windows-x64-setup.exe" "jisu-$version-macos-arm64.dmg" "jisu-$version-macos-x64.dmg" appcast-windows_x64.xml appcast-macos_arm64.xml appcast-macos_x64.xml; do
             [ -f "dist/$f" ] || { echo "::error::missing dist/$f"; ls -l dist; exit 1; }
           done
           (cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)

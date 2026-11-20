@@ -9,6 +9,7 @@ import (
 	"github.com/nsgo-dev/nsgo/base"
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/ui"
+	"github.com/nsgo-dev/nsgo/updater"
 )
 
 func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() palette, directory func() string, concurrency func() int,
@@ -114,6 +115,8 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 			Footer: []core.Node{cancel(newJob), confirm("add-download", "开始下载", add)}},
 		ui.Dialog{Open: settings.Get, OnOpenChange: changeOpen(settings), Title: "设置",
 			Children: []core.Node{
+				label(versionCaption(), 12, func() core.Color { return colors().muted }),
+				compactButton("check-update", "检查更新", func() { updater.Check(cx) }),
 				label("下载目录", 12, func() core.Color { return colors().ink }), folder,
 				compactButton("choose-folder", "选择文件夹", func() {
 					cx.PickDirectories(core.PickDirectoriesOptions{Title: "选择下载目录", Start: directory()}, func(dirs []core.Directory, err error) {
@@ -143,6 +146,13 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 				apply(selected(), anyJob, queue.Remove)
 			})}},
 	}
+}
+
+func versionCaption() string {
+	if version := core.App().Version; version != "" {
+		return "当前版本 v" + version
+	}
+	return "当前版本（开发版）"
 }
 
 func detailPanel(cx *core.Scope, queue *download.Queue, colors func() palette, selected func() []jobView, run func(func() error) bool) core.Node {

@@ -1,6 +1,12 @@
 name: jisu
 id: com.jellli.jisu
 version: 0.2.0
+release:
+  github: jellli/jisu
+updates:
+  key: 62hIbBa5b2TuNGLmWkFoir3TNPeDpV1XyeOIxbek2Wo=
+  channel: direct
+  automatic: true
 copyright: Copyright © 2026 jellli
 icon:
   png: resources/icon.png
