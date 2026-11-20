@@ -17,10 +17,10 @@ const segmentCount = 16
 
 var columns = []datatable.Column{
 	{Key: "selection", Title: " ", Width: 37, Fixed: true, NoResize: true, NoMove: true, NoSelect: true, Align: datatable.AlignCenterColumn},
-	{Key: "name", Title: "文件名 / 协议", Width: 296, MinWidth: 130},
+	{Key: "name", Title: "文件名 / 协议", Width: 266, MinWidth: 130},
 	{Key: "size", Title: "大小", Width: 96, MinWidth: 67, Align: datatable.AlignEndColumn},
-	{Key: "progress", Title: "进度与分块", Width: 235, MinWidth: 135},
-	{Key: "speed", Title: "速度", Width: 110, MinWidth: 88, Align: datatable.AlignEndColumn},
+	{Key: "progress", Title: "进度与分块", Width: 210, MinWidth: 135},
+	{Key: "speed", Title: "速度", Width: 105, MinWidth: 88, Align: datatable.AlignEndColumn},
 	{Key: "eta", Title: "剩余时间", Width: 104, MinWidth: 77, Align: datatable.AlignEndColumn},
 }
 
@@ -123,6 +123,9 @@ func workspaceTable(cx *core.Scope, queue *download.Queue, colors func() palette
 				Else: func(*core.Scope) core.Node {
 					title := label("", 11, func() core.Color { return colors().muted })
 					title.ContentFunc = func() string { return cell().Title }
+					title.StyleFunc = func() core.Style {
+						return core.Style{Color: colors().muted, TextAlign: columnAlignment(cell().Column)}
+					}
 					return title
 				},
 			}
@@ -135,6 +138,12 @@ func workspaceTable(cx *core.Scope, queue *download.Queue, colors func() palette
 				}
 				return colors().ink
 			})
+			color := text.StyleFunc
+			text.StyleFunc = func() core.Style {
+				style := color()
+				style.TextAlign = columnAlignment(cell().Column)
+				return style
+			}
 			text.ContentFunc = func() string { return cell().Text }
 			return core.Show{When: func() bool { return cell().Key == "selection" }, Then: func(*core.Scope) core.Node {
 				return ui.Checkbox{Label: "选择任务", Checked: func() bool { return isSelected(get().ID) }, OnChange: func(checked bool) {
@@ -175,6 +184,13 @@ func workspaceTable(cx *core.Scope, queue *download.Queue, colors func() palette
 		Label: "下载任务", TestID: "tasks",
 		Empty: label("没有下载任务", 12, func() core.Color { return colors().muted }),
 	}
+}
+
+func columnAlignment(i int) core.TextAlign {
+	if i >= 0 && i < len(columns) && columns[i].Align == datatable.AlignEndColumn {
+		return core.TextAlignEnd
+	}
+	return core.TextAlignStart
 }
 
 func nameCell(colors func() palette, get func() jobView, name core.Text) core.Node {
