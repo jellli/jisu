@@ -71,6 +71,13 @@ func newClient() *http.Client {
 }
 
 func (q *Queue) request(ctx context.Context, rawURL, byteRange, validator string, options ...RequestOptions) (*http.Response, error) {
+	if throttle, ok := ctx.Value(throttleKey{}).(*requestThrottle); ok {
+		return throttle.request(ctx, q, rawURL, byteRange, validator, options...)
+	}
+	return q.requestOnce(ctx, rawURL, byteRange, validator, options...)
+}
+
+func (q *Queue) requestOnce(ctx context.Context, rawURL, byteRange, validator string, options ...RequestOptions) (*http.Response, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
@@ -119,6 +126,7 @@ func (b *bodyWithTimeout) Close() error {
 }
 
 func (q *Queue) transfer(ctx context.Context, run *attempt, job *record) error {
+	ctx = context.WithValue(ctx, throttleKey{}, newRequestThrottle())
 	dir := partialDirectory(job)
 	assembly := filepath.Join(dir, "assembled")
 	if job.FinalPath != "" && sameFile(job.FinalPath, assembly) {
