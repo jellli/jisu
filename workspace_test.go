@@ -17,6 +17,30 @@ import (
 
 func TestMain(m *testing.M) { nsgotest.Main(m) }
 
+func TestProxySettingsDialog(t *testing.T) {
+	dir := t.TempDir()
+	queue, err := download.Open(filepath.Join(dir, "queue.json"), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(queue.Close)
+	if err := queue.SetProxy(download.ProxySettings{Mode: "custom", URL: "http://user:secret@localhost:8080"}); err != nil {
+		t.Fatal(err)
+	}
+	app := nsgotest.Start(t, workspace(queue), nsgotest.Size(1100, 680), nsgotest.Idiom(core.IdiomDesktop), nsgotest.Measure())
+	app.Press("id:settings")
+	app.WaitFor("id:proxy-url", time.Second)
+	app.Type("id:proxy-url", "bad")
+	app.Press("id:apply-proxy")
+	app.WaitFor("id:settings-dialog >> text:/proxy URL must use/", time.Second)
+	if queue.State().Proxy.URL != "http://user:secret@localhost:8080" {
+		t.Fatal("invalid UI input changed saved proxy")
+	}
+	if nsgotest.Target() != "" {
+		app.Screenshot("proxy-settings")
+	}
+}
+
 func TestSegmentFillShowsNoncontiguousBytes(t *testing.T) {
 	got := segmentFill(160, []download.ByteSpan{{Start: 0, End: 14}, {Start: 80, End: 87}, {Start: 87, End: 94}})
 	want := [segmentCount]float32{0: 1, 1: 0.4, 8: 1, 9: 0.4}
