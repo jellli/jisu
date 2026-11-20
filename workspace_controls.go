@@ -90,6 +90,9 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 	}
 	errorLabel := label("", 12, func() core.Color { return core.RGB(0xdc2626) })
 	errorLabel.ContentFunc = message.Get
+	settingsError := errorLabel
+	settingsError.MaxLines = 0
+	settingsError.TestID = "settings-error"
 	input := func(id, placeholder string, signal *core.Signal[string], submit func()) core.Node {
 		return core.Input{TestID: id, Value: signal.Get, OnChange: signal.Set, Placeholder: placeholder, AutoFocus: true,
 			OnSubmit: func(string) { submit() }, Style: core.Style{Height: core.Pt(34), FontSize: 13,
@@ -149,17 +152,14 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 					OnChange: func(mode string) {
 						proxyMode.Set(mode)
 						message.Set("")
-						if mode != "custom" {
-							applyProxy()
-						}
 					}},
 				core.Show{When: func() bool { return proxyMode.Get() == "custom" }, Then: func(*core.Scope) core.Node {
 					field := input("proxy-url", "http://host:port", proxyURL, applyProxy).(core.Input)
 					field.Masked = true
-					return core.View{Style: core.Style{Gap: 6}, Children: []core.Node{field, compactButton("apply-proxy", "应用代理", applyProxy)}}
+					return field
 				}},
-				errorLabel,
-			}, Footer: []core.Node{compactButton("", "关闭", func() { settings.Set(false) })}},
+				settingsError,
+			}, Footer: []core.Node{confirm("apply-proxy", "应用代理", applyProxy), compactButton("", "关闭", func() { settings.Set(false) })}},
 		ui.Dialog{Open: newQueue.Get, OnOpenChange: changeOpen(newQueue), Title: "新建队列",
 			Children: []core.Node{input("queue-name", "队列名称", name, create), errorLabel},
 			Footer:   []core.Node{cancel(newQueue), confirm("create-queue", "创建", create)}},
