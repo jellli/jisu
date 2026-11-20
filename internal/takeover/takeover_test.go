@@ -75,7 +75,7 @@ func TestEndpointAndChain(t *testing.T) {
 	}))
 	defer server.Close()
 	var input, output bytes.Buffer
-	WriteFrame(&input, Message{URL: server.URL + "/file.zip", Cookies: "session=ok"})
+	WriteFrame(&input, Message{URL: server.URL + "/file.zip", Cookies: "session=ok", Filename: `C:\Downloads\browser-name.zip`})
 	if err := RunHost(&input, &output, config, func() error {
 		t.Fatal("unexpected launch")
 		return nil
@@ -95,6 +95,9 @@ func TestEndpointAndChain(t *testing.T) {
 				t.Fatal(j.Error)
 			}
 			if j.State == download.Completed {
+				if j.Name != "browser-name.zip" {
+					t.Fatalf("browser filename was not forwarded: %q", j.Name)
+				}
 				path, err := q.CompletedPath(j.ID)
 				if err != nil {
 					t.Fatal(err)

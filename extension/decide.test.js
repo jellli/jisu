@@ -1,8 +1,15 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {shouldTakeover} from './decide.js';
+import {shouldTakeover, filenameHint} from './decide.js';
 
 const item = {url: 'https://example.com/a.zip', state: 'in_progress'};
+
+test('browser filename hints contain only the basename', () => {
+  assert.equal(filenameHint('/home/user/Downloads/file.zip'), 'file.zip');
+  assert.equal(filenameHint('C:\\Users\\user\\Downloads\\file.zip'), 'file.zip');
+  assert.equal(filenameHint('C:\\Downloads/mixed/file.zip'), 'file.zip');
+  assert.equal(filenameHint(), '');
+});
 
 test('common types and large files', () => {
   assert.equal(shouldTakeover(item), true);

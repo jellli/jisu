@@ -1,4 +1,5 @@
 import {createTakeoverTracker} from './pending.js';
+import {filenameHint} from './decide.js';
 
 const alt = new Map();
 const tracker = createTakeoverTracker();
@@ -41,7 +42,7 @@ async function takeover(item) {
       referrer: item.referrer || '',
       cookies: cookies.filter(c => !c.partitionKey).map(c => `${c.name}=${c.value}`).join('; '),
       userAgent: navigator.userAgent,
-      filename: item.filename
+      filename: filenameHint(item.filename)
     });
     if (!reply?.ok) throw new Error('Takeover failed');
     await chrome.downloads.cancel(item.id);

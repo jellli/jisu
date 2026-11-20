@@ -126,7 +126,12 @@ func handler(token string, q *download.Queue) http.Handler {
 			json.NewEncoder(w).Encode(Reply{Error: "invalid Takeover message"})
 			return
 		}
-		err = q.AddWithOptions(m.URL, download.DefaultQueue, download.RequestOptions{Cookie: m.Cookies, Referer: m.Referrer, UserAgent: m.UserAgent})
+		err = q.AddWithOptions(m.URL, download.DefaultQueue, download.RequestOptions{
+			Cookie:    m.Cookies,
+			Referer:   m.Referrer,
+			UserAgent: m.UserAgent,
+			Filename:  m.Filename,
+		})
 		reply := Reply{OK: err == nil}
 		if err != nil {
 			reply.Error = "could not add Takeover Job"

@@ -131,7 +131,7 @@ func (q *Queue) transfer(ctx context.Context, run *attempt, job *record) error {
 		return err
 	}
 	defer resp.Body.Close()
-	name := responseName(resp)
+	name := responseName(resp, job.Options.Filename)
 	var p *plan
 	switch resp.StatusCode {
 	case http.StatusOK:
@@ -291,7 +291,7 @@ func (q *Queue) stream(ctx context.Context, run *attempt, job *record, dir, asse
 	if err := clearParts(dir); err != nil {
 		return err
 	}
-	if err := q.prepare(ctx, run, job, nil, responseName(resp), total, 0, 1); err != nil {
+	if err := q.prepare(ctx, run, job, nil, responseName(resp, job.Options.Filename), total, 0, 1); err != nil {
 		return err
 	}
 	if err := q.withFile(assembly, os.O_TRUNC, func(f *os.File) error {
@@ -675,9 +675,12 @@ func contentRange(header string) (first, last, size int64, valid bool) {
 	return first, last, size, e1 == nil && e2 == nil && e3 == nil && first >= 0 && last >= first && size > last
 }
 
-func responseName(resp *http.Response) string {
+func responseName(resp *http.Response, filenameHint string) string {
 	if _, params, err := mime.ParseMediaType(resp.Header.Get("Content-Disposition")); err == nil && params["filename"] != "" {
 		return safeFilename(params["filename"])
+	}
+	if filenameHint != "" {
+		return safeFilename(filenameHint)
 	}
 	return safeFilename(path.Base(resp.Request.URL.Path))
 }

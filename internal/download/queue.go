@@ -182,8 +182,12 @@ func (q *Queue) AddWithOptions(rawURL, queue string, opts RequestOptions) error 
 	}
 	var id [16]byte
 	rand.Read(id[:])
+	name := safeFilename(path.Base(parsed.Path))
+	if opts.Filename != "" {
+		name = opts.Filename
+	}
 	q.config.Jobs = append(q.config.Jobs, &record{Options: opts, Job: Job{
-		ID: fmt.Sprintf("%x", id), URL: parsed.String(), Name: safeFilename(path.Base(parsed.Path)),
+		ID: fmt.Sprintf("%x", id), URL: parsed.String(), Name: name,
 		Directory: q.config.Directory, State: Queued, Queue: queue,
 	}})
 	if err := q.saveLocked(); err != nil {

@@ -11,9 +11,13 @@ type RequestOptions struct {
 	Cookie    string `json:"-"`
 	Referer   string `json:"referer,omitempty"`
 	UserAgent string `json:"userAgent,omitempty"`
+	Filename  string `json:"filename,omitempty"`
 }
 
 func (o *RequestOptions) validate() error {
+	if o.Filename != "" {
+		o.Filename = safeFilename(o.Filename)
+	}
 	for _, v := range []struct {
 		s   string
 		max int

@@ -37,3 +37,7 @@ export function shouldTakeover(item, skipAlt = false) {
   return Math.max(item.totalBytes || 0, item.fileSize || 0) >= 5 * 1024 * 1024 ||
     types.has(ext) || mimes.has(item.mime) || /^video\//.test(item.mime || '');
 }
+
+export function filenameHint(filename = '') {
+  return filename.replaceAll('\\', '/').split('/').pop();
+}
