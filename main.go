@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/jellli/jisu/internal/download"
+	"github.com/jellli/jisu/internal/takeover"
 	"github.com/nsgo-dev/nsgo"
 	"github.com/nsgo-dev/nsgo/core"
 )
@@ -18,11 +19,18 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "chrome-extension://") {
+		if err := takeover.RunHost(os.Stdin, os.Stdout, config, takeover.StartApp); err != nil {
+			log.Print(err)
+		}
+		return
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		log.Fatal(err)
 	}
 	var queue *download.Queue
+	var endpoint *takeover.Endpoint
 	nsgo.Run(func(app *core.Scope) {
 		var openErr error
 		queue, openErr = download.Open(filepath.Join(config, "jisu", "queue.json"), downloadsDir(config, home))
@@ -33,10 +41,20 @@ func main() {
 			})
 			return
 		}
+		if err := takeover.Register(home, config); err != nil {
+			log.Print(err)
+		}
+		endpoint, openErr = takeover.Start(config, queue)
+		if openErr != nil {
+			log.Print(openErr)
+		}
 		nsgo.SetMainView(app, workspace(queue))
 	}, nsgo.WindowSize(1100, 680), nsgo.WindowConstraints(core.WindowConstraints{MinWidth: 740, MinHeight: 500}),
 		nsgo.Appearance(core.AppearanceLight))
 	if queue != nil {
+		if endpoint != nil {
+			endpoint.Close()
+		}
 		queue.Close()
 	}
 }

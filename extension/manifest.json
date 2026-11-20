@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "jisu Takeover",
+  "version": "1.0.0",
+  "description": "Hand browser downloads to jisu. Hold Alt to skip.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3SEQpteBt1qsEepVkuR7DUs01bzglmvdep2QyC0Ygs2Ae7XXjuHyo7B5RCWzHvOvn9JY6uodWkZop6orCOdeKPZN4lQ/ERfZkcvyVt77nENJv1GA65RjxDqjccBt7hZGQ4oZc7xZtX0TQqb1DdoFb4okPTeSULoh6qdcTHP4qpddJCPilmGqUlcriagiM5zJJzuH3I6pg7T6iQw/MTS6F2+QZGK+dfvTW0c6v9lBuVhlbgxEOds4J2cx0KfGiblhjjfTthEuTn4/LAvO9sK6OiI+Baglw2SFZR5GtyI14zTgiYdvAaLFMaSgCj3L4omFNsjTjD/IIXRqX9XUmeWP/QIDAQAB",
+  "permissions": [
+    "downloads",
+    "cookies",
+    "nativeMessaging"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "alt.js"
+      ],
+      "all_frames": true
+    }
+  ]
+}
