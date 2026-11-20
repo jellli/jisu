@@ -62,9 +62,9 @@ Takeover does not carry over an authenticated browser session; for sites that ne
 
 ### Proxies
 
-jisu uses the macOS or Windows system proxy automatically when no proxy environment variables are set. Changes to the system proxy take effect within a few seconds, including when you toggle tools such as Clash. HTTP, HTTPS and SOCKS proxies and host bypass lists are supported; automatic proxy configuration scripts (PAC) are not.
+jisu uses the macOS or Windows system proxy automatically when no non-empty HTTP or HTTPS proxy environment variables are configured. Changes to the system proxy take effect within a few seconds, including when you toggle tools such as Clash. HTTP, HTTPS and SOCKS proxies and host bypass lists are supported; automatic proxy configuration scripts (PAC) are not.
 
-If any of `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` or `NO_PROXY` (or their lowercase forms) is set, jisu uses Go's standard environment proxy behavior instead of the system settings. That behavior supports `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY`, but does not use `ALL_PROXY`. Localhost and loopback addresses always connect directly. Other operating systems use environment proxy settings only.
+If `HTTP_PROXY` or `HTTPS_PROXY` (or their lowercase forms) has a non-empty value, jisu uses Go's standard environment proxy behavior instead of the system settings, including `NO_PROXY` bypasses. Otherwise, `NO_PROXY` (or `no_proxy`) adds bypasses to the system proxy's own exceptions. Empty proxy variables and `ALL_PROXY` do not disable the system proxy; `ALL_PROXY` is ignored. Localhost and loopback addresses always connect directly. Other operating systems use environment proxy settings only.
 
 ## Develop
 

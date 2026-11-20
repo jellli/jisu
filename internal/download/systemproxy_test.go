@@ -120,16 +120,22 @@ func TestProxyBypass(t *testing.T) {
 func TestProxyEnvironmentPrecedence(t *testing.T) {
 	req, _ := http.NewRequest("GET", "https://github.com", nil)
 	sentinel := errors.New("environment result")
-	for _, key := range []string{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy"} {
-		for _, value := range []string{"", "configured"} {
-			lookup := func(k string) (string, bool) { return value, k == key }
+	for _, key := range []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"} {
+		for _, result := range []error{nil, sentinel} {
+			value := "configured"
+			lookup := func(k string) (string, bool) {
+				if k == key {
+					return value, true
+				}
+				return "", false
+			}
 			_, err := resolveProxy(req, lookup, func(r *http.Request) (*url.URL, error) {
 				if r != req {
 					t.Fatal("request changed")
 				}
-				return nil, sentinel
+				return nil, result
 			}, func() systemProxyConfig { t.Fatal("system lookup with env set"); return systemProxyConfig{} })
-			if err != sentinel {
+			if err != result {
 				t.Fatalf("%s=%q: %v", key, value, err)
 			}
 		}
@@ -149,6 +155,37 @@ func TestProxyEnvironmentPrecedence(t *testing.T) {
 		if got != nil || err != nil {
 			t.Fatalf("loopback proxied: %s", host)
 		}
+	}
+}
+
+func TestSystemProxyEnvironmentBypass(t *testing.T) {
+	for _, tc := range []struct {
+		name, rawURL string
+		env          map[string]string
+		want         string
+	}{
+		{"empty proxies", "https://github.com", map[string]string{"HTTP_PROXY": "", "HTTPS_PROXY": "", "http_proxy": "", "https_proxy": ""}, "http://proxy.test:80"},
+		{"ALL_PROXY ignored", "https://github.com", map[string]string{"ALL_PROXY": "http://other.test:80", "all_proxy": "http://other.test:80"}, "http://proxy.test:80"},
+		{"unmatched NO_PROXY", "https://github.com", map[string]string{"NO_PROXY": "dev.test"}, "http://proxy.test:80"},
+		{"matched NO_PROXY", "https://github.com", map[string]string{"NO_PROXY": "github.com"}, ""},
+		{"lowercase bypass", "https://github.com", map[string]string{"no_proxy": "github.com"}, ""},
+		{"empty uppercase fallback", "https://github.com", map[string]string{"NO_PROXY": "", "no_proxy": "github.com"}, ""},
+		{"uppercase precedence", "https://github.com", map[string]string{"NO_PROXY": "dev.test", "no_proxy": "github.com"}, "http://proxy.test:80"},
+		{"domain bypass", "https://assets.example.com", map[string]string{"NO_PROXY": ".example.com"}, ""},
+		{"CIDR bypass", "https://10.2.3.4", map[string]string{"NO_PROXY": "10.0.0.0/8"}, ""},
+		{"port bypass", "https://github.com:443", map[string]string{"NO_PROXY": "github.com:443"}, ""},
+		{"different port", "https://github.com:8443", map[string]string{"NO_PROXY": "github.com:443"}, "http://proxy.test:80"},
+		{"wildcard bypass", "https://github.com", map[string]string{"NO_PROXY": "*"}, ""},
+		{"OS bypass retained", "https://internal.test", map[string]string{"NO_PROXY": "github.com"}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req, _ := http.NewRequest("GET", tc.rawURL, nil)
+			lookup := func(k string) (string, bool) { v, ok := tc.env[k]; return v, ok }
+			got, err := resolveProxy(req, lookup, func(*http.Request) (*url.URL, error) { t.Fatal("environment proxy selected"); return nil, nil }, func() systemProxyConfig { return parseWindowsProxy(true, "proxy.test:80", "internal.test") })
+			if err != nil || proxyString(got) != tc.want {
+				t.Fatalf("got %v, %v; want %q", got, err, tc.want)
+			}
+		})
 	}
 }
 

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/net/http/httpproxy"
 )
 
 type systemProxyConfig struct {
@@ -18,7 +20,7 @@ type systemProxyConfig struct {
 	excludeSimple      bool
 }
 
-// ProxyForRequest uses environment settings when present, otherwise the system proxy.
+// ProxyForRequest uses non-empty HTTP(S) environment proxies, otherwise the system proxy.
 func ProxyForRequest(req *http.Request) (*url.URL, error) {
 	return resolveProxy(req, os.LookupEnv, http.ProxyFromEnvironment, cachedSystemProxy)
 }
@@ -27,12 +29,21 @@ func resolveProxy(req *http.Request, lookupEnv func(string) (string, bool), envi
 	if localProxyHost(req.URL.Hostname()) {
 		return nil, nil
 	}
-	for _, key := range []string{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy"} {
-		if _, set := lookupEnv(key); set {
+	for _, key := range []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"} {
+		if value, _ := lookupEnv(key); value != "" {
 			return environment(req)
 		}
 	}
-	return system().forURL(req.URL), nil
+	proxy := system().forURL(req.URL)
+	if proxy == nil {
+		return nil, nil
+	}
+	noProxy, _ := lookupEnv("NO_PROXY")
+	if noProxy == "" {
+		noProxy, _ = lookupEnv("no_proxy")
+	}
+	config := httpproxy.Config{HTTPProxy: proxy.String(), HTTPSProxy: proxy.String(), NoProxy: noProxy}
+	return config.ProxyFunc()(req.URL)
 }
 
 func localProxyHost(host string) bool {
