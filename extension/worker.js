@@ -1,6 +1,7 @@
-import {shouldTakeover} from './decide.js';
+import {createTakeoverTracker} from './pending.js';
 
 const alt = new Map();
+const tracker = createTakeoverTracker();
 
 chrome.runtime.onMessage.addListener((message, sender) => {
   if (message.type !== 'alt' || !sender.tab) return;
@@ -17,7 +18,20 @@ chrome.tabs.onRemoved.addListener(id => alt.delete(id));
 chrome.downloads.onCreated.addListener(async item => {
   const now = Date.now();
   const skip = [...alt.values()].some(s => s.held || now - s.lastHeld < 3000);
-  if (!shouldTakeover(item, skip)) return;
+  if (tracker.created(item, skip)) await takeover(item);
+});
+
+chrome.downloads.onChanged.addListener(async delta => {
+  if (!delta.filename) return;
+  try {
+    const [item] = await chrome.downloads.search({id: delta.id});
+    if (item && tracker.claim(item)) await takeover(item);
+  } catch {
+    // Leave the browser download alone if its current state is unavailable.
+  }
+});
+
+async function takeover(item) {
   try {
     await chrome.downloads.pause(item.id);
     const url = item.finalUrl || item.url;
@@ -35,4 +49,4 @@ chrome.downloads.onCreated.addListener(async item => {
   } catch {
     await chrome.downloads.resume(item.id).catch(() => {});
   }
-});
+}
