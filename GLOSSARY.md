@@ -27,3 +27,6 @@ _Avoid_: Thread, worker
 **Takeover**:
 The browser extension handing a browser download to jisu instead of letting the browser save it.
 _Avoid_: Capture, interception
+
+**System proxy**:
+A proxy configured in the operating system's network settings, shared by applications that use those settings.

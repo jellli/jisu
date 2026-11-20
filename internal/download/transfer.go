@@ -49,6 +49,7 @@ func (p plan) segment(i int) segment {
 
 func newClient() *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = ProxyForRequest
 	transport.ResponseHeaderTimeout = 30 * time.Second
 	transport.DisableCompression = true
 	return &http.Client{Transport: transport, CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -99,11 +100,15 @@ func (q *Queue) requestOnce(ctx context.Context, rawURL, byteRange, validator st
 	if err != nil {
 		cancel()
 		var urlErr *url.Error
+		host := req.URL.Hostname()
 		if errors.As(err, &urlErr) {
+			if target, parseErr := url.Parse(urlErr.URL); parseErr == nil && target.Hostname() != "" {
+				host = target.Hostname()
+			}
 			// The URL in net/http errors may contain private query parameters.
 			err = urlErr.Err
 		}
-		return nil, fmt.Errorf("request failed: %w", err)
+		return nil, fmt.Errorf("request to %s failed: %w", host, err)
 	}
 	resp.Body = &bodyWithTimeout{ReadCloser: resp.Body, cancel: cancel}
 	return resp, nil

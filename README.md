@@ -60,6 +60,12 @@ If a server doesn't support safe resume or has changed the file, jisu starts tha
 
 Takeover does not carry over an authenticated browser session; for sites that need one, see [Browser Takeover](#browser-takeover). Video playlists are not supported.
 
+### Proxies
+
+jisu uses the macOS or Windows system proxy automatically when no proxy environment variables are set. Changes to the system proxy take effect within a few seconds, including when you toggle tools such as Clash. HTTP, HTTPS and SOCKS proxies and host bypass lists are supported; automatic proxy configuration scripts (PAC) are not.
+
+If any of `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` or `NO_PROXY` (or their lowercase forms) is set, jisu uses Go's standard environment proxy behavior instead of the system settings. That behavior supports `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY`, but does not use `ALL_PROXY`. Localhost and loopback addresses always connect directly. Other operating systems use environment proxy settings only.
+
 ## Develop
 
 - Install [Go 1.27.3 or later](https://go.dev/dl/). Linux development needs GTK 4.12 or later with Pango and Cairo, such as Ubuntu 24.04.
