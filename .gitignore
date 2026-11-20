@@ -1,7 +1,7 @@
-# mygo build output and dev bundle
-/build/
-/.mygo/
-mygo_windows_*.syso
+# NSGo build output and test screenshots
+/dist/
+/.nsgo/
+nsgo_windows_*.syso
 
 # Go
 *.test
@@ -14,6 +14,3 @@ mygo_windows_*.syso
 Thumbs.db
 .idea/
 .vscode/
-
-# WebView2 bootstrapper that CI downloads into the Windows installer
-/packaging/windows/MicrosoftEdgeWebview2Setup.exe

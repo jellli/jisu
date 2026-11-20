@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -25,23 +26,26 @@ const (
 )
 
 type Job struct {
-	ID             string  `json:"id"`
-	URL            string  `json:"url"`
-	Name           string  `json:"name"`
-	Directory      string  `json:"directory"`
-	State          string  `json:"state"`
-	Error          string  `json:"error"`
-	Total          *int64  `json:"total"`
-	Received       int64   `json:"received"`
-	Connections    int     `json:"connections"`
-	BytesPerSecond float64 `json:"bytesPerSecond"`
+	ID               string  `json:"id"`
+	URL              string  `json:"url"`
+	Name             string  `json:"name"`
+	Directory        string  `json:"directory"`
+	State            string  `json:"state"`
+	Error            string  `json:"error"`
+	Total            *int64  `json:"total"`
+	Received         int64   `json:"received"`
+	Connections      int     `json:"connections"`
+	ConnectionTarget int     `json:"connectionTarget,omitempty"`
+	Queue            string  `json:"queue,omitempty"`
+	BytesPerSecond   float64 `json:"bytesPerSecond"`
 }
 
 type Snapshot struct {
-	Jobs              []Job  `json:"jobs"`
-	DownloadDirectory string `json:"downloadDirectory"`
-	Concurrency       int    `json:"concurrency"`
-	Connections       int    `json:"connections"`
+	Jobs              []Job    `json:"jobs"`
+	Queues            []string `json:"queues"`
+	DownloadDirectory string   `json:"downloadDirectory"`
+	Concurrency       int      `json:"concurrency"`
+	Connections       int      `json:"connections"`
 }
 
 type record struct {
@@ -52,6 +56,7 @@ type record struct {
 
 type config struct {
 	Jobs        []*record `json:"jobs"`
+	Queues      []string  `json:"queues,omitempty"`
 	Directory   string    `json:"directory"`
 	Concurrency int       `json:"concurrency"`
 	Connections int       `json:"connections"`
@@ -62,6 +67,7 @@ type attempt struct {
 	cancel  context.CancelFunc
 	started time.Time
 	base    int64
+	ranges  []*liveRange // guarded by Queue.mu
 }
 
 type Queue struct {
@@ -90,6 +96,9 @@ func Open(stateFile, directory string) (*Queue, error) {
 	if q.config.Connections == 0 {
 		q.config.Connections = 8
 	}
+	if len(q.config.Queues) == 0 {
+		q.config.Queues = []string{DefaultQueue, NightQueue}
+	}
 	if !validConnections(q.config.Connections) || !filepath.IsAbs(q.config.Directory) || q.config.Concurrency < 1 || q.config.Concurrency > 5 {
 		return nil, errors.New("invalid saved download settings")
 	}
@@ -98,6 +107,12 @@ func Open(stateFile, directory string) (*Queue, error) {
 			return nil, errors.New("invalid saved download")
 		}
 		job.Connections, job.BytesPerSecond = 0, 0
+		if job.Queue == "" {
+			job.Queue = DefaultQueue
+		}
+		if !q.hasQueueLocked(job.Queue) || (job.ConnectionTarget != 0 && !validConnections(job.ConnectionTarget)) {
+			return nil, errors.New("invalid saved download queue or connection target")
+		}
 		if job.State == Downloading {
 			job.State = Queued
 		}
@@ -125,7 +140,11 @@ func (q *Queue) Close() {
 func (q *Queue) State() Snapshot {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	state := Snapshot{Jobs: make([]Job, 0, len(q.config.Jobs)), DownloadDirectory: q.config.Directory, Concurrency: q.config.Concurrency, Connections: q.config.Connections}
+	return q.stateLocked()
+}
+
+func (q *Queue) stateLocked() Snapshot {
+	state := Snapshot{Jobs: make([]Job, 0, len(q.config.Jobs)), Queues: slices.Clone(q.config.Queues), DownloadDirectory: q.config.Directory, Concurrency: q.config.Concurrency, Connections: q.config.Connections}
 	for _, job := range q.config.Jobs {
 		view := job.Job
 		if run := q.active[job.ID]; run != nil && view.State == Downloading {
@@ -137,6 +156,10 @@ func (q *Queue) State() Snapshot {
 }
 
 func (q *Queue) Add(rawURL string) error {
+	return q.AddToQueue(rawURL, DefaultQueue)
+}
+
+func (q *Queue) AddToQueue(rawURL, queue string) error {
 	parsed, err := parseURL(strings.TrimSpace(rawURL))
 	if err != nil {
 		return err
@@ -146,11 +169,14 @@ func (q *Queue) Add(rawURL string) error {
 	if q.closed {
 		return errors.New("download queue is closed")
 	}
+	if !q.hasQueueLocked(queue) {
+		return errors.New("queue does not exist")
+	}
 	var id [16]byte
 	rand.Read(id[:])
 	q.config.Jobs = append(q.config.Jobs, &record{Job: Job{
 		ID: fmt.Sprintf("%x", id), URL: parsed.String(), Name: safeFilename(path.Base(parsed.Path)),
-		Directory: q.config.Directory, State: Queued,
+		Directory: q.config.Directory, State: Queued, Queue: queue,
 	}})
 	if err := q.saveLocked(); err != nil {
 		q.config.Jobs = q.config.Jobs[:len(q.config.Jobs)-1]

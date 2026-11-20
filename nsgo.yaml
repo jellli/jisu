@@ -1,0 +1,10 @@
+name: jisu
+id: com.jellli.jisu
+version: 0.1.0
+copyright: Copyright © 2026 jellli
+icon:
+  png: resources/icon.png
+windows:
+  publisher: jellli
+build:
+  targets: [macos_arm64, macos_x64, windows_x64]
