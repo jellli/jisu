@@ -62,7 +62,7 @@ func (q *Queue) proxyForRequest(req *http.Request) (*url.URL, error) {
 }
 
 func systemProxy(req *http.Request) (*url.URL, error) {
-	return http.ProxyFromEnvironment(req)
+	return ProxyForRequest(req)
 }
 
 func (q *Queue) SetProxy(p ProxySettings) error {

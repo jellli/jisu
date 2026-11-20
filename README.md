@@ -64,11 +64,17 @@ Paste a direct `https://` or `http://` download URL. jisu defaults to eight conn
 
 Pause jobs or change the number of simultaneous downloads in settings. Interrupted active jobs automatically rejoin the queue when you reopen jisu; downloads you paused stay paused. Use Retry to resume a failed download.
 
-Settings also offers System (the default, using environment proxy settings), None (direct), and Custom proxy modes. Custom accepts `http://`, `https://`, `socks5://`, or `socks5h://` URLs with a host and port, optionally including `user:password@`. A bare `host:port` uses HTTP. Choose a mode, enter the URL in the masked field for Custom, then press Apply Proxy to save. Changes affect new requests without restarting; active transfers are not interrupted. Proxy settings, including credentials, are stored in your user configuration directory's `jisu/queue.json`, so protect that file. Browser Takeover's loopback connection always stays direct.
+Settings also offers System (the default, using environment or operating system proxy settings), None (direct), and Custom proxy modes. Custom accepts `http://`, `https://`, `socks5://`, or `socks5h://` URLs with a host and port, optionally including `user:password@`. A bare `host:port` uses HTTP. Choose a mode, enter the URL in the masked field for Custom, then press Apply Proxy to save. Changes affect new requests without restarting; active transfers are not interrupted. Proxy settings, including credentials, are stored in your user configuration directory's `jisu/queue.json`, so protect that file. Browser Takeover's loopback connection always stays direct.
 
 If a server doesn't support safe resume or has changed the file, jisu starts that download from the beginning. Completed files never overwrite existing files. Partial data lives in a hidden `.jisu-*` folder in the destination directory and is removed on completion or when you remove an unfinished job. Save to a local filesystem that supports hard links, such as APFS or NTFS. Removing a completed job only removes its history entry.
 
 Takeover does not carry over an authenticated browser session; for sites that need one, see [Browser Takeover](#browser-takeover). Video playlists are not supported.
+
+### Proxies
+
+In System mode, jisu uses the macOS or Windows system proxy automatically when no non-empty HTTP or HTTPS proxy environment variables are configured. Changes to the system proxy take effect within a few seconds, including when you toggle tools such as Clash. HTTP, HTTPS and SOCKS proxies and host bypass lists are supported; automatic proxy configuration scripts (PAC) are not.
+
+If `HTTP_PROXY` or `HTTPS_PROXY` (or their lowercase forms) has a non-empty value, System mode uses Go's standard environment proxy behavior instead of the system settings, including `NO_PROXY` bypasses. Otherwise, `NO_PROXY` (or `no_proxy`) adds bypasses to the system proxy's own exceptions. Empty proxy variables and `ALL_PROXY` do not disable the system proxy; `ALL_PROXY` is ignored. In System mode, localhost and loopback addresses always connect directly. Other operating systems use environment proxy settings only.
 
 ## Develop
 
