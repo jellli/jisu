@@ -48,8 +48,11 @@ func TestWindowsBreakawayRetry(t *testing.T) {
 			if (cmd.SysProcAttr.CreationFlags&createBreakawayFromJob != 0) != wantBreakaway {
 				t.Fatal("incorrect breakaway flag")
 			}
-			if cmd.SysProcAttr.CreationFlags&0x208 != 0x208 || !cmd.SysProcAttr.HideWindow {
+			if cmd.SysProcAttr.CreationFlags&0x208 != 0x208 {
 				t.Fatal("lost detached process flags")
+			}
+			if cmd.SysProcAttr.HideWindow {
+				t.Fatal("GUI launch must not hide its window")
 			}
 			if fail && calls == 1 {
 				return errors.New("breakaway denied")

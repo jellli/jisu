@@ -15,7 +15,7 @@ func startWindows(command func() *exec.Cmd, start func(*exec.Cmd) error) (*exec.
 	var err error
 	for _, flags := range []uint32{0x00000208 | createBreakawayFromJob, 0x00000208} {
 		cmd := command()
-		cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: flags, HideWindow: true}
+		cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: flags}
 		if err = start(cmd); err == nil {
 			return cmd, nil
 		}
