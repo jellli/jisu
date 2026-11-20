@@ -70,6 +70,45 @@ func TestSCUtilProxy(t *testing.T) {
 	}
 }
 
+func TestSCUtilProxyIgnoresScopedSettings(t *testing.T) {
+	p := parseSCUtilProxy(`<dictionary> {
+  HTTPEnable : 1
+  HTTPProxy : global.test
+  HTTPPort : 7890
+  HTTPSEnable : 0
+  ExcludeSimpleHostnames : 0
+  ExceptionsList : <array> {
+    0 : global-bypass.test
+  }
+  __SCOPED__ : <dictionary> {
+    en0 : <dictionary> {
+      HTTPEnable : 1
+      HTTPProxy : scoped.test
+      HTTPPort : 9999
+      HTTPSEnable : 1
+      HTTPSProxy : scoped.test
+      HTTPSPort : 9999
+      ExcludeSimpleHostnames : 1
+      ExceptionsList : <array> {
+        0 : scoped-bypass.test
+      }
+    }
+  }
+}`)
+	for raw, want := range map[string]string{
+		"http://remote.test":        "http://global.test:7890",
+		"http://global-bypass.test": "",
+		"http://scoped-bypass.test": "http://global.test:7890",
+		"http://printer":            "http://global.test:7890",
+		"https://remote.test":       "",
+	} {
+		u, _ := url.Parse(raw)
+		if got := proxyString(p.forURL(u)); got != want {
+			t.Errorf("%s: got %q, want %q", raw, got, want)
+		}
+	}
+}
+
 func TestWindowsProxy(t *testing.T) {
 	for _, tc := range []struct{ server, http, https, socks string }{
 		{"proxy.test:8080", "http://proxy.test:8080", "http://proxy.test:8080", ""},

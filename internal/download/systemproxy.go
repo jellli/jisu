@@ -130,24 +130,30 @@ func proxyEndpoint(raw, scheme string) *url.URL {
 func parseSCUtilProxy(output string) systemProxyConfig {
 	values := map[string]string{}
 	var exceptions []string
-	inExceptions := false
+	depth, exceptionsDepth := 0, -1
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "ExceptionsList :") {
-			inExceptions = true
+		if line == "}" {
+			if depth == exceptionsDepth {
+				exceptionsDepth = -1
+			}
+			depth--
 			continue
 		}
-		if inExceptions {
-			if line == "}" {
-				inExceptions = false
-				continue
+		key, value, ok := strings.Cut(line, " : ")
+		if strings.HasSuffix(line, "{") {
+			if depth == 1 && key == "ExceptionsList" && strings.HasPrefix(value, "<array>") {
+				exceptionsDepth = depth + 1
 			}
-			if _, value, ok := strings.Cut(line, " : "); ok {
-				exceptions = append(exceptions, strings.TrimSpace(value))
-			}
+			depth++
 			continue
 		}
-		if key, value, ok := strings.Cut(line, " : "); ok {
+		if !ok {
+			continue
+		}
+		if depth == exceptionsDepth {
+			exceptions = append(exceptions, strings.TrimSpace(value))
+		} else if depth == 1 {
 			values[key] = strings.TrimSpace(value)
 		}
 	}
