@@ -5,3 +5,4 @@ A Chrome and Edge extension hands downloads to jisu instead of letting the brows
 ## Consequences
 
 - The extension talks to the desktop app through native messaging, which has to be registered separately for Chrome and for Edge.
+- [ADR 0009](0009-takeover-cookies.md) describes cookie lifetime and redirect rules.

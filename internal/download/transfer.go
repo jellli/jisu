@@ -55,6 +55,14 @@ func newClient() *http.Client {
 		if len(via) >= 10 {
 			return errors.New("too many redirects")
 		}
+		for _, previous := range via {
+			if previous.URL.Hostname() != req.URL.Hostname() || (previous.URL.Scheme == "https" && req.URL.Scheme == "http") {
+				req.Header.Del("Cookie")
+			}
+		}
+		if ref, _ := url.Parse(req.Referer()); ref != nil && ref.Scheme == "https" && req.URL.Scheme == "http" {
+			req.Header.Del("Referer")
+		}
 		if _, err := parseURL(req.URL.String()); err != nil {
 			return errors.New("download was redirected to an unsupported URL")
 		}
@@ -62,7 +70,7 @@ func newClient() *http.Client {
 	}}
 }
 
-func (q *Queue) request(ctx context.Context, rawURL, byteRange, validator string) (*http.Response, error) {
+func (q *Queue) request(ctx context.Context, rawURL, byteRange, validator string, options ...RequestOptions) (*http.Response, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
@@ -70,6 +78,9 @@ func (q *Queue) request(ctx context.Context, rawURL, byteRange, validator string
 		return nil, errors.New("could not prepare download request")
 	}
 	req.Header.Set("Accept-Encoding", "identity")
+	if len(options) > 0 {
+		options[0].apply(req)
+	}
 	if byteRange != "" {
 		req.Header.Set("Range", "bytes="+byteRange)
 	}
@@ -115,7 +126,7 @@ func (q *Queue) transfer(ctx context.Context, run *attempt, job *record) error {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
-	resp, err := q.request(ctx, job.URL, "0-0", "")
+	resp, err := q.request(ctx, job.URL, "0-0", "", job.Options)
 	if err != nil {
 		return err
 	}
@@ -255,7 +266,7 @@ func (r checkedReader) Read(p []byte) (int, error) {
 }
 
 func (q *Queue) streamFull(ctx context.Context, run *attempt, job *record, dir, assembly string) error {
-	resp, err := q.request(ctx, job.URL, "", "")
+	resp, err := q.request(ctx, job.URL, "", "", job.Options)
 	if err != nil {
 		return err
 	}
@@ -474,7 +485,13 @@ func (q *Queue) downloadRange(ctx context.Context, job *record, f *os.File, p *p
 	q.mu.Lock()
 	start, end := r.Next, r.End
 	q.mu.Unlock()
-	resp, err := q.request(ctx, p.URL, fmt.Sprintf("%d-%d", start, end), p.Validator)
+	opts := job.Options
+	original, _ := url.Parse(job.URL)
+	target, _ := url.Parse(p.URL)
+	if original.Hostname() != target.Hostname() || (original.Scheme == "https" && target.Scheme == "http") {
+		opts.Cookie = ""
+	}
+	resp, err := q.request(ctx, p.URL, fmt.Sprintf("%d-%d", start, end), p.Validator, opts)
 	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()

@@ -50,8 +50,9 @@ type Snapshot struct {
 
 type record struct {
 	Job
-	Plan      *plan  `json:"plan,omitempty"`
-	FinalPath string `json:"finalPath,omitempty"`
+	Options   RequestOptions `json:"requestOptions,omitempty"`
+	Plan      *plan          `json:"plan,omitempty"`
+	FinalPath string         `json:"finalPath,omitempty"`
 }
 
 type config struct {
@@ -160,6 +161,13 @@ func (q *Queue) Add(rawURL string) error {
 }
 
 func (q *Queue) AddToQueue(rawURL, queue string) error {
+	return q.AddWithOptions(rawURL, queue, RequestOptions{})
+}
+
+func (q *Queue) AddWithOptions(rawURL, queue string, opts RequestOptions) error {
+	if err := opts.validate(); err != nil {
+		return err
+	}
 	parsed, err := parseURL(strings.TrimSpace(rawURL))
 	if err != nil {
 		return err
@@ -174,7 +182,7 @@ func (q *Queue) AddToQueue(rawURL, queue string) error {
 	}
 	var id [16]byte
 	rand.Read(id[:])
-	q.config.Jobs = append(q.config.Jobs, &record{Job: Job{
+	q.config.Jobs = append(q.config.Jobs, &record{Options: opts, Job: Job{
 		ID: fmt.Sprintf("%x", id), URL: parsed.String(), Name: safeFilename(path.Base(parsed.Path)),
 		Directory: q.config.Directory, State: Queued, Queue: queue,
 	}})

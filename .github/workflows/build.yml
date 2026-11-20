@@ -21,6 +21,23 @@ defaults:
     shell: bash
 
 jobs:
+  extension:
+    name: Extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - run: node --test extension/
+      - run: zip -r jisu-extension.zip extension/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: jisu-extension
+          path: jisu-extension.zip
+
   test:
     name: Test (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
