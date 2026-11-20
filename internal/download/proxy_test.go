@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 )
@@ -124,7 +125,14 @@ func TestCustomProxyDownload(t *testing.T) {
 func TestNoneBypassesEnvironmentProxy(t *testing.T) {
 	if os.Getenv("JISU_PROXY_TEST_CHILD") != "1" {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestNoneBypassesEnvironmentProxy$")
-		cmd.Env = append(os.Environ(), "JISU_PROXY_TEST_CHILD=1", "HTTP_PROXY=http://127.0.0.1:1", "http_proxy=", "NO_PROXY=", "no_proxy=", "REQUEST_METHOD=")
+		for _, entry := range os.Environ() {
+			key, _, _ := strings.Cut(entry, "=")
+			if strings.EqualFold(key, "HTTP_PROXY") || strings.EqualFold(key, "NO_PROXY") || strings.EqualFold(key, "REQUEST_METHOD") || strings.EqualFold(key, "JISU_PROXY_TEST_CHILD") {
+				continue
+			}
+			cmd.Env = append(cmd.Env, entry)
+		}
+		cmd.Env = append(cmd.Env, "JISU_PROXY_TEST_CHILD=1", "HTTP_PROXY=http://127.0.0.1:1", "NO_PROXY=", "REQUEST_METHOD=")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%v\n%s", err, out)
 		}
