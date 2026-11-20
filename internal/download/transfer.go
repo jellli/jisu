@@ -78,6 +78,7 @@ func (q *Queue) request(ctx context.Context, rawURL, byteRange, validator string
 		return nil, errors.New("could not prepare download request")
 	}
 	req.Header.Set("Accept-Encoding", "identity")
+	req.Header.Set("User-Agent", "jisu")
 	if len(options) > 0 {
 		options[0].apply(req)
 	}
@@ -501,6 +502,9 @@ func (q *Queue) downloadRange(ctx context.Context, job *record, f *os.File, p *p
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusOK {
 		return errRangeIgnored
+	}
+	if resp.StatusCode != http.StatusPartialContent {
+		return fmt.Errorf("server returned HTTP %d", resp.StatusCode)
 	}
 	first, last, size, ok := contentRange(resp.Header.Get("Content-Range"))
 	if resp.StatusCode != http.StatusPartialContent || !ok || first != start || last != end || size != p.Size ||

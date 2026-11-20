@@ -122,8 +122,8 @@ func StartApp() error {
 	if err != nil {
 		return err
 	}
-	cmd := launchCommand(runtime.GOOS, executable)
-	if err = startDetached(cmd); err != nil {
+	cmd, err := startDetached(func() *exec.Cmd { return launchCommand(runtime.GOOS, executable) })
+	if err != nil {
 		return err
 	}
 	return cmd.Process.Release()

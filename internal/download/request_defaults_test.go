@@ -13,8 +13,8 @@ func TestPlainJobRequestDefaults(t *testing.T) {
 		if _, present := r.Header["Cookie"]; present {
 			t.Error("plain Job sent a Cookie header")
 		}
-		if r.UserAgent() != "Go-http-client/1.1" {
-			t.Errorf("User-Agent = %q, want Go default", r.UserAgent())
+		if r.UserAgent() != "jisu" {
+			t.Errorf("User-Agent = %q, want jisu", r.UserAgent())
 		}
 		http.ServeContent(w, r, "file.bin", time.Unix(100, 0), bytes.NewReader([]byte("plain Job")))
 	}))
