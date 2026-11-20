@@ -7,18 +7,18 @@ import (
 
 const createBreakawayFromJob = 0x01000000
 
-func startDetached(cmd *exec.Cmd) error {
-	return startWindows(cmd, func() error { return cmd.Start() })
+func startDetached(command func() *exec.Cmd) (*exec.Cmd, error) {
+	return startWindows(command, (*exec.Cmd).Start)
 }
 
-func startWindows(cmd *exec.Cmd, start func() error) error {
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: 0x00000008 | 0x00000200 | createBreakawayFromJob,
-		HideWindow:    true,
+func startWindows(command func() *exec.Cmd, start func(*exec.Cmd) error) (*exec.Cmd, error) {
+	var err error
+	for _, flags := range []uint32{0x00000208 | createBreakawayFromJob, 0x00000208} {
+		cmd := command()
+		cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: flags, HideWindow: true}
+		if err = start(cmd); err == nil {
+			return cmd, nil
+		}
 	}
-	if err := start(); err == nil {
-		return nil
-	}
-	cmd.SysProcAttr.CreationFlags &^= createBreakawayFromJob
-	return start()
+	return nil, err
 }
