@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,97 @@ import (
 )
 
 func TestMain(m *testing.M) { nsgotest.Main(m) }
+
+func TestProxySettingsDialog(t *testing.T) {
+	dir := t.TempDir()
+	queue, err := download.Open(filepath.Join(dir, "queue.json"), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(queue.Close)
+	if err := queue.SetProxy(download.ProxySettings{Mode: "custom", URL: "http://user:secret@localhost:8080"}); err != nil {
+		t.Fatal(err)
+	}
+	app := nsgotest.Start(t, workspace(queue), nsgotest.Size(1100, 680), nsgotest.Idiom(core.IdiomDesktop), nsgotest.Measure())
+	app.Press("id:settings")
+	app.WaitFor("id:proxy-url", time.Second)
+	app.Type("id:proxy-url", "bad")
+	app.Press("id:apply-proxy")
+	app.WaitFor("id:settings-dialog >> text:/proxy URL must use/", time.Second)
+	if bounds := app.Find("id:settings-error").Bounds(); bounds.Size.Height < 24 {
+		t.Fatalf("validation error did not wrap: %v", bounds)
+	}
+	if queue.State().Proxy.URL != "http://user:secret@localhost:8080" {
+		t.Fatal("invalid UI input changed saved proxy")
+	}
+	if nsgotest.Target() != "" {
+		app.Screenshot("proxy-settings")
+	}
+}
+
+func TestSelectingCustomProxyDoesNotApply(t *testing.T) {
+	dir := t.TempDir()
+	queue, err := download.Open(filepath.Join(dir, "queue.json"), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(queue.Close)
+	app := nsgotest.Start(t, workspace(queue), nsgotest.Size(1100, 680), nsgotest.Idiom(core.IdiomDesktop), nsgotest.Measure())
+	app.Press("id:settings")
+	app.Press("id:proxy-mode")
+	app.WaitFor("id:proxy-mode-2", time.Second)
+	row := app.Find("id:proxy-mode-2").Bounds()
+	app.Press("id:proxy-mode-2")
+	app.WaitFor("id:proxy-url", time.Second)
+	button := app.Find("id:apply-proxy").Bounds()
+	if button.Origin.X < row.Origin.X+row.Size.Width && row.Origin.X < button.Origin.X+button.Size.Width && button.Origin.Y < row.Origin.Y+row.Size.Height && row.Origin.Y < button.Origin.Y+button.Size.Height {
+		t.Fatalf("Apply overlaps dismissed Custom row: row=%v button=%v", row, button)
+	}
+	if queue.State().Proxy.Mode != "system" {
+		t.Fatal("selecting Custom applied settings")
+	}
+	app.WaitForGone("id:settings-dialog >> text:/proxy URL must use/", time.Second)
+	app.Press("id:apply-proxy")
+	app.WaitFor("id:settings-dialog >> text:/proxy URL must use/", time.Second)
+}
+
+func TestWorkspaceUpdateCheck(t *testing.T) {
+	if nsgotest.Target() != "" {
+		t.Skip("update responses are simulated only by the headless driver")
+	}
+	for _, tc := range []struct {
+		name   string
+		found  core.UpdateCheck
+		alerts int
+	}{
+		{"newer", core.UpdateCheck{App: "jisu", Current: "0.2.0", Version: "0.3.0", URL: "https://example.com/release"}, 1},
+		{"current", core.UpdateCheck{App: "jisu", Current: "0.2.0"}, 1},
+		{"offline", core.UpdateCheck{Err: errors.New("offline")}, 1},
+		{"native dialog", core.UpdateCheck{Shown: true}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			queue, err := download.Open(filepath.Join(dir, "queue.json"), dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(queue.Close)
+			app := nsgotest.Start(t, workspace(queue), nsgotest.Size(1100, 680))
+			app.Update = func(bool) core.UpdateCheck { return tc.found }
+			app.Press("id:settings")
+			if len(app.Query("text:"+versionCaption())) != 1 {
+				t.Fatal("current version is missing")
+			}
+			app.Press("id:check-update")
+			if !slices.Equal(app.UpdateChecks, []bool{false}) {
+				t.Fatalf("checks %v", app.UpdateChecks)
+			}
+			if alerts := app.Alerts(); len(alerts) != tc.alerts {
+				t.Fatalf("alerts %+v", alerts)
+			}
+		})
+	}
+}
 
 func TestSegmentFillShowsNoncontiguousBytes(t *testing.T) {
 	got := segmentFill(160, []download.ByteSpan{{Start: 0, End: 14}, {Start: 80, End: 87}, {Start: 87, End: 94}})

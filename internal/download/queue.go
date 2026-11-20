@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -41,11 +42,12 @@ type Job struct {
 }
 
 type Snapshot struct {
-	Jobs              []Job    `json:"jobs"`
-	Queues            []string `json:"queues"`
-	DownloadDirectory string   `json:"downloadDirectory"`
-	Concurrency       int      `json:"concurrency"`
-	Connections       int      `json:"connections"`
+	Proxy             ProxySettings `json:"proxy"`
+	Jobs              []Job         `json:"jobs"`
+	Queues            []string      `json:"queues"`
+	DownloadDirectory string        `json:"downloadDirectory"`
+	Concurrency       int           `json:"concurrency"`
+	Connections       int           `json:"connections"`
 }
 
 type record struct {
@@ -56,11 +58,12 @@ type record struct {
 }
 
 type config struct {
-	Jobs        []*record `json:"jobs"`
-	Queues      []string  `json:"queues,omitempty"`
-	Directory   string    `json:"directory"`
-	Concurrency int       `json:"concurrency"`
-	Connections int       `json:"connections"`
+	Proxy       ProxySettings `json:"proxy"`
+	Jobs        []*record     `json:"jobs"`
+	Queues      []string      `json:"queues,omitempty"`
+	Directory   string        `json:"directory"`
+	Concurrency int           `json:"concurrency"`
+	Connections int           `json:"connections"`
 }
 
 type attempt struct {
@@ -72,6 +75,7 @@ type attempt struct {
 }
 
 type Queue struct {
+	proxy      atomic.Value
 	mu         sync.Mutex
 	workers    sync.WaitGroup
 	config     config
@@ -85,7 +89,7 @@ type Queue struct {
 func Open(stateFile, directory string) (*Queue, error) {
 	q := &Queue{
 		config: config{Directory: directory, Concurrency: 2},
-		file:   stateFile, active: make(map[string]*attempt), client: newClient(),
+		file:   stateFile, active: make(map[string]*attempt),
 	}
 	body, err := os.ReadFile(stateFile)
 	if err == nil {
@@ -98,6 +102,13 @@ func Open(stateFile, directory string) (*Queue, error) {
 	if q.config.Connections == 0 {
 		q.config.Connections = 8
 	}
+	q.config.Proxy, err = normalizeProxy(q.config.Proxy)
+	if err != nil {
+		return nil, err
+	}
+	q.proxy.Store(q.config.Proxy)
+	q.client = newClient()
+	q.client.Transport.(*http.Transport).Proxy = q.proxyForRequest
 	if len(q.config.Queues) == 0 {
 		q.config.Queues = []string{DefaultQueue, NightQueue}
 	}
@@ -147,6 +158,7 @@ func (q *Queue) State() Snapshot {
 
 func (q *Queue) stateLocked() Snapshot {
 	state := Snapshot{Jobs: make([]Job, 0, len(q.config.Jobs)), Queues: slices.Clone(q.config.Queues), DownloadDirectory: q.config.Directory, Concurrency: q.config.Concurrency, Connections: q.config.Connections}
+	state.Proxy = q.config.Proxy
 	for _, job := range q.config.Jobs {
 		view := job.Job
 		if run := q.active[job.ID]; run != nil && view.State == Downloading {

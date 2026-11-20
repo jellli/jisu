@@ -9,6 +9,7 @@ import (
 	"github.com/nsgo-dev/nsgo/base"
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/ui"
+	"github.com/nsgo-dev/nsgo/updater"
 )
 
 func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() palette, directory func() string, concurrency func() int,
@@ -17,6 +18,12 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 	apply func([]jobView, func(jobView) bool, func(string) error)) (core.Node, []core.Node) {
 	newJob, settings, newQueue := core.NewSignal(cx, false), core.NewSignal(cx, false), core.NewSignal(cx, false)
 	url, destination, name := core.NewSignal(cx, ""), core.NewSignal(cx, download.DefaultQueue), core.NewSignal(cx, "")
+	proxyMode, proxyURL := core.NewSignal(cx, "system"), core.NewSignal(cx, "")
+	applyProxy := func() {
+		run(func() error {
+			return queue.SetProxy(download.ProxySettings{Mode: proxyMode.Get(), URL: proxyURL.Get()})
+		})
+	}
 	openNew := func() {
 		message.Set("")
 		url.Set("")
@@ -61,7 +68,13 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 		Children: []core.Node{
 			brand, newButton, resume, pause, trash,
 			core.View{Style: core.Style{FlexGrow: 1}}, searchField,
-			compactButton("settings", "设置", func() { message.Set(""); settings.Set(true) }),
+			compactButton("settings", "设置", func() {
+				message.Set("")
+				p := queue.State().Proxy
+				proxyMode.Set(p.Mode)
+				proxyURL.Set(p.URL)
+				settings.Set(true)
+			}),
 			compactButton("theme", "主题", func() {
 				dark.Set(!dark.Get())
 				if dark.Get() {
@@ -78,6 +91,9 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 	}
 	errorLabel := label("", 12, func() core.Color { return core.RGB(0xdc2626) })
 	errorLabel.ContentFunc = message.Get
+	settingsError := errorLabel
+	settingsError.MaxLines = 0
+	settingsError.TestID = "settings-error"
 	input := func(id, placeholder string, signal *core.Signal[string], submit func()) core.Node {
 		return core.Input{TestID: id, Value: signal.Get, OnChange: signal.Set, Placeholder: placeholder, AutoFocus: true,
 			OnSubmit: func(string) { submit() }, Style: core.Style{Height: core.Pt(34), FontSize: 13,
@@ -112,8 +128,10 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 				return ui.Select[string]{Label: "队列", Options: options, Value: destination.Get, OnChange: destination.Set, TestID: "download-queue"}
 			}), errorLabel},
 			Footer: []core.Node{cancel(newJob), confirm("add-download", "开始下载", add)}},
-		ui.Dialog{Open: settings.Get, OnOpenChange: changeOpen(settings), Title: "设置",
+		ui.Dialog{Open: settings.Get, OnOpenChange: changeOpen(settings), Title: "设置", TestID: "settings-dialog",
 			Children: []core.Node{
+				label(versionCaption(), 12, func() core.Color { return colors().muted }),
+				compactButton("check-update", "检查更新", func() { updater.Check(cx) }),
 				label("下载目录", 12, func() core.Color { return colors().ink }), folder,
 				compactButton("choose-folder", "选择文件夹", func() {
 					cx.PickDirectories(core.PickDirectoriesOptions{Title: "选择下载目录", Start: directory()}, func(dirs []core.Directory, err error) {
@@ -131,8 +149,20 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 					run(func() error { return queue.SetConcurrency(n) })
 				}},
 				compactButton("new-queue", "新建队列", func() { settings.Set(false); message.Set(""); name.Set(""); newQueue.Set(true) }),
-				errorLabel,
-			}, Footer: []core.Node{compactButton("", "关闭", func() { settings.Set(false) })}},
+				label("代理服务器", 12, func() core.Color { return colors().ink }),
+				ui.Select[string]{TestID: "proxy-mode", Label: "Proxy", Value: proxyMode.Get,
+					Options: []ui.Option[string]{{Value: "system", Label: "System"}, {Value: "none", Label: "None"}, {Value: "custom", Label: "Custom"}},
+					OnChange: func(mode string) {
+						proxyMode.Set(mode)
+						message.Set("")
+					}},
+				core.Show{When: func() bool { return proxyMode.Get() == "custom" }, Then: func(*core.Scope) core.Node {
+					field := input("proxy-url", "http://host:port", proxyURL, applyProxy).(core.Input)
+					field.Masked = true
+					return field
+				}},
+				settingsError,
+			}, Footer: []core.Node{confirm("apply-proxy", "应用代理", applyProxy), compactButton("", "关闭", func() { settings.Set(false) })}},
 		ui.Dialog{Open: newQueue.Get, OnOpenChange: changeOpen(newQueue), Title: "新建队列",
 			Children: []core.Node{input("queue-name", "队列名称", name, create), errorLabel},
 			Footer:   []core.Node{cancel(newQueue), confirm("create-queue", "创建", create)}},
@@ -143,6 +173,13 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 				apply(selected(), anyJob, queue.Remove)
 			})}},
 	}
+}
+
+func versionCaption() string {
+	if version := core.App().Version; version != "" {
+		return "当前版本 v" + version
+	}
+	return "当前版本（开发版）"
 }
 
 func detailPanel(cx *core.Scope, queue *download.Queue, colors func() palette, selected func() []jobView, run func(func() error) bool) core.Node {
