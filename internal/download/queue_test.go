@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -130,6 +131,57 @@ func TestLiveConnections(t *testing.T) {
 	}
 	waitForState(t, q, 0, Completed)
 	assertOutput(t, q, job.ID, fixture.original)
+}
+
+func TestNamedQueuesAndLiveJobConnections(t *testing.T) {
+	t.Parallel()
+	fixture := newRangeFixture(t)
+	fixture.stall.Store(true)
+	q, file, dir := openTestQueue(t)
+	for _, item := range []struct{ name, queue string }{
+		{"first.bin", DefaultQueue}, {"second.bin", NightQueue}, {"third.bin", DefaultQueue},
+	} {
+		if err := q.AddToQueue(fixture.URL+"/"+item.name, item.queue); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first := waitJob(t, q, 0, func(j Job) bool { return j.Connections == 8 && j.Received > 0 })
+	second := waitJob(t, q, 1, func(j Job) bool { return j.Connections == 8 && j.Received > 0 })
+	third := q.State().Jobs[2]
+	if err := q.SetJobConnections(first.ID, 16); err != nil {
+		t.Fatal(err)
+	}
+	waitJob(t, q, 0, func(j Job) bool { return j.Connections == 16 })
+	if err := q.SetJobConnections(first.ID, 4); err != nil {
+		t.Fatal(err)
+	}
+	waitJob(t, q, 0, func(j Job) bool { return j.Connections == 4 })
+	if got := q.State().Jobs[1]; got.ID != second.ID || got.Connections != 8 || got.ConnectionTarget != 0 {
+		t.Fatalf("changing one job affected another: %+v", got)
+	}
+	if err := q.MoveJobs([]string{third.ID}, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := q.State().Jobs; got[0].ID != third.ID || got[1].ID != second.ID || got[2].ID != first.ID {
+		t.Fatalf("reorder crossed queues: %+v", got)
+	}
+	if err := q.CreateQueue("Work"); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.MoveToQueue([]string{first.ID}, "Work"); err != nil {
+		t.Fatal(err)
+	}
+	q.Close()
+	reopened, err := Open(file, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	got := reopened.State()
+	if !slices.Equal(got.Queues, []string{DefaultQueue, NightQueue, "Work"}) || got.Jobs[2].ID != first.ID ||
+		got.Jobs[2].Queue != "Work" || got.Jobs[2].ConnectionTarget != 4 {
+		t.Fatalf("queue or target was not restored: %+v", got)
+	}
 }
 
 func TestLegacyResume(t *testing.T) {

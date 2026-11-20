@@ -3,7 +3,7 @@ name: Build
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, "devin/*-kite-v2-nsgo-ui"]
     tags: ["v*"]
   workflow_dispatch:
 
@@ -40,8 +40,37 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go vet ./...
-      - run: go build .
-      - run: go test ./...
+      - run: go test -race ./...
+
+  desktop:
+    name: Native workspace (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, target: macos }
+          - { os: windows-latest, target: windows }
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Check the native app
+        run: go tool nsgo check
+      - name: Exercise the production workspace
+        run: go tool nsgo test -target ${{ matrix.target }} -timeout 90s
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: kite-workspace-${{ matrix.target }}
+          path: .nsgo/test/screenshots/**/*.png
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
 
   package:
     name: Package (${{ matrix.name }})
@@ -52,20 +81,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # On Windows, mygo build downloads NSIS (checked against its
-          # SHA-256) for the installer.
           - name: Windows x64
             os: windows-latest
-            platform: windows/amd64
+            target: windows_x64
             artifact: jisu-windows-x64
-            installers: windows-amd64/{slug}-setup-{version}-amd64.exe
-          # Disk images need hdiutil, so macOS builds on macOS. The arm64
-          # runner builds both architectures, one disk image each.
+            installers: windows-x64-setup.exe
           - name: macOS
             os: macos-latest
-            platform: darwin/arm64,darwin/amd64
+            target: macos_arm64,macos_x64
             artifact: jisu-macos
-            installers: darwin-arm64/{slug}-{version}-arm64.dmg darwin-amd64/{slug}-{version}-amd64.dmg
+            installers: macos-arm64.dmg macos-x64.dmg
     steps:
       - uses: actions/checkout@v7
         with:
@@ -73,43 +98,39 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: Check the tag against mygo.json
+      - name: Check the tag against nsgo.yaml
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          version=$(jq -r .version mygo.json)
+          version=$(awk '$1 == "version:" {print $2}' nsgo.yaml)
           if [ "$GITHUB_REF_NAME" != "v$version" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match mygo.json version $version"
+            echo "::error::tag $GITHUB_REF_NAME does not match nsgo.yaml version $version"
             exit 1
           fi
-      - name: Fetch the WebView2 bootstrapper
+      - name: Ensure the NSIS compiler is installed
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $out = "packaging/windows/MicrosoftEdgeWebview2Setup.exe"
-          Invoke-WebRequest -UseBasicParsing -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile $out
-          $sig = Get-AuthenticodeSignature $out
-          if ($sig.Status -ne "Valid" -or $sig.SignerCertificate.Subject -notmatch "O=Microsoft Corporation") {
-            throw "WebView2 bootstrapper signature: $($sig.Status) $($sig.SignerCertificate.Subject)"
+          $nsis = Join-Path ${env:ProgramFiles(x86)} "NSIS/makensis.exe"
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue) -and -not (Test-Path $nsis)) {
+            choco install nsis --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
       - name: Build
-        run: go tool mygo build -platform "${{ matrix.platform }}"
+        run: go tool nsgo build -target "${{ matrix.target }}"
       - name: Collect the installers
         env:
           INSTALLERS: ${{ matrix.installers }}
         run: |
-          slug=$(jq -r .slug mygo.json)
-          version=$(jq -r .version mygo.json)
-          out=$(jq -r '.out // "build"' mygo.json)
+          version=$(awk '$1 == "version:" {print $2}' nsgo.yaml)
           mkdir -p upload
-          for f in $INSTALLERS; do
-            f=${f//\{slug\}/$slug}
-            f=${f//\{version\}/$version}
-            if [ ! -f "$out/$f" ]; then
-              echo "::error::missing installer $out/$f"
-              ls -R "$out"
+          for suffix in $INSTALLERS; do
+            f="dist/releases/jisu-$version-$suffix"
+            if [ ! -f "$f" ]; then
+              echo "::error::missing installer $f"
+              ls -R dist
               exit 1
             fi
-            cp "$out/$f" upload/
+            cp "$f" upload/
           done
           ls -l upload
       - uses: actions/upload-artifact@v7
@@ -122,7 +143,7 @@ jobs:
   release:
     name: Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: package
+    needs: [package, desktop]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -136,7 +157,7 @@ jobs:
       - name: Check every platform's installer is there
         run: |
           version=${GITHUB_REF_NAME#v}
-          for f in "jisu-setup-$version-amd64.exe" "jisu-$version-arm64.dmg" "jisu-$version-amd64.dmg"; do
+          for f in "jisu-$version-windows-x64-setup.exe" "jisu-$version-macos-arm64.dmg" "jisu-$version-macos-x64.dmg"; do
             [ -f "dist/$f" ] || { echo "::error::missing dist/$f"; ls -l dist; exit 1; }
           done
           (cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
