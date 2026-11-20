@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -157,6 +158,41 @@ func TestManifest(t *testing.T) {
 		return nil
 	}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRegisterStableExecutable(t *testing.T) {
+	home, config := t.TempDir(), t.TempDir()
+	for _, root := range browserTestRoots(runtime.GOOS, home) {
+		if err := os.MkdirAll(root, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const stable = "/Applications/jisu.app/Contents/MacOS/jisu"
+	const temporary = "/private/var/folders/ab/AppTranslocation/uuid/d/jisu.app/Contents/MacOS/jisu"
+	for _, fail := range []bool{false, true} {
+		err := registerExecutable(home, config, temporary, func(input string) (string, error) {
+			if input != temporary {
+				t.Fatal(input)
+			}
+			if fail {
+				return "", errors.New("cannot resolve")
+			}
+			return stable, nil
+		}, func(string) error { return nil })
+		if (err != nil) != fail {
+			t.Fatalf("registration error = %v", err)
+		}
+		for _, path := range ManifestPaths(runtime.GOOS, home, config) {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var manifest struct{ Path string }
+			if err := json.Unmarshal(data, &manifest); err != nil || manifest.Path != stable {
+				t.Fatalf("manifest = %s, %v", data, err)
+			}
+		}
 	}
 }
 

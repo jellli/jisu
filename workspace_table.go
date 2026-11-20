@@ -43,7 +43,15 @@ func workspaceTable(cx *core.Scope, queue *download.Queue, colors func() palette
 		}
 		return indices
 	}
+	var beforeRowPress *[]string
 	selectRows := func(indices []int) {
+		previous := slices.Clone(selection.Get())
+		beforeRowPress = &previous
+		cx.Post(func() {
+			if beforeRowPress == &previous {
+				beforeRowPress = nil
+			}
+		})
 		ids := make([]string, 0, len(indices))
 		for _, i := range indices {
 			ids = append(ids, rowAt(i).ID)
@@ -146,7 +154,7 @@ func workspaceTable(cx *core.Scope, queue *download.Queue, colors func() palette
 			}
 			text.ContentFunc = func() string { return cell().Text }
 			return core.Show{When: func() bool { return cell().Key == "selection" }, Then: func(*core.Scope) core.Node {
-				return ui.Checkbox{Label: "选择任务", Checked: func() bool { return isSelected(get().ID) }, OnChange: func(checked bool) {
+				return ui.Checkbox{Label: "选择任务", TestID: "select-" + get().ID, Checked: func() bool { return isSelected(get().ID) }, OnChange: func(checked bool) {
 					id := get().ID
 					ids := slices.Clone(selection.Get())
 					if checked && !slices.Contains(ids, id) {
@@ -169,6 +177,24 @@ func workspaceTable(cx *core.Scope, queue *download.Queue, colors func() palette
 		},
 		RowHeight: 44, HeaderHeight: 32, FontSize: 12, MultiSelect: true, NoLoopSelection: true,
 		SelectedRows: selectedRows, OnSelectedRowsChange: selectRows, OnContextMenu: contextMenu,
+		OnRowPress: func(press datatable.Press) {
+			previous := selection.Get()
+			if beforeRowPress != nil {
+				previous = *beforeRowPress
+			}
+			beforeRowPress = nil
+			// The table's hit layer takes pointer presses over rendered checkboxes.
+			if press.Column == 0 {
+				id := rowAt(press.Row).ID
+				ids := slices.Clone(previous)
+				if slices.Contains(ids, id) {
+					ids = slices.DeleteFunc(ids, func(value string) bool { return value == id })
+				} else {
+					ids = append(ids, id)
+				}
+				selection.Set(ids)
+			}
+		},
 		Style:     core.Style{FlexGrow: 1, MinHeight: core.Pt(0)},
 		StyleFunc: func() core.Style { return core.Style{Background: colors().paper} },
 		StylesFunc: func() datatable.Styles {

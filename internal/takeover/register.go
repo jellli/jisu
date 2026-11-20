@@ -47,6 +47,14 @@ func register(home, config string, platformRegister func(string) error) error {
 	if err != nil {
 		return err
 	}
+	return registerExecutable(home, config, executable, stableExecutable, platformRegister)
+}
+
+func registerExecutable(home, config, executable string, resolve func(string) (string, error), platformRegister func(string) error) error {
+	executable, err := resolve(executable)
+	if err != nil {
+		return err
+	}
 	for _, path := range ManifestPaths(runtime.GOOS, home, config) {
 		manifest := map[string]any{
 			"name":            HostName,
