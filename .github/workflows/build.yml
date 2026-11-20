@@ -167,6 +167,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/release-notes.md
+          sparse-checkout-cone-mode: false
       - uses: actions/download-artifact@v8
         with:
           pattern: jisu-*
@@ -183,9 +188,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          sed "s/<version>/${GITHUB_REF_NAME#v}/g" .github/release-notes.md > "$RUNNER_TEMP/release-notes.md"
           gh release create "$GITHUB_REF_NAME" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --title "jisu $GITHUB_REF_NAME" \
             --generate-notes \
-            --notes "Choose arm64 for Apple Silicon, amd64 for Intel Macs, or the x64 setup executable for Windows. This preview is not notarized on macOS or code-signed on Windows. See the [installation notes](https://github.com/jellli/jisu#install) if macOS or SmartScreen warns about the installer."
+            --notes-file "$RUNNER_TEMP/release-notes.md"
