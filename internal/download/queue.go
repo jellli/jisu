@@ -27,18 +27,19 @@ const (
 )
 
 type Job struct {
-	ID               string  `json:"id"`
-	URL              string  `json:"url"`
-	Name             string  `json:"name"`
-	Directory        string  `json:"directory"`
-	State            string  `json:"state"`
-	Error            string  `json:"error"`
-	Total            *int64  `json:"total"`
-	Received         int64   `json:"received"`
-	Connections      int     `json:"connections"`
-	ConnectionTarget int     `json:"connectionTarget,omitempty"`
-	Queue            string  `json:"queue,omitempty"`
-	BytesPerSecond   float64 `json:"bytesPerSecond"`
+	Proxy            ProxySettings `json:"proxy,omitzero"`
+	ID               string        `json:"id"`
+	URL              string        `json:"url"`
+	Name             string        `json:"name"`
+	Directory        string        `json:"directory"`
+	State            string        `json:"state"`
+	Error            string        `json:"error"`
+	Total            *int64        `json:"total"`
+	Received         int64         `json:"received"`
+	Connections      int           `json:"connections"`
+	ConnectionTarget int           `json:"connectionTarget,omitempty"`
+	Queue            string        `json:"queue,omitempty"`
+	BytesPerSecond   float64       `json:"bytesPerSecond"`
 }
 
 type Snapshot struct {
@@ -120,6 +121,10 @@ func Open(stateFile, directory string) (*Queue, error) {
 			return nil, errors.New("invalid saved download")
 		}
 		job.Connections, job.BytesPerSecond = 0, 0
+		job.Proxy, err = normalizeJobProxy(job.Proxy)
+		if err != nil {
+			return nil, fmt.Errorf("invalid saved job proxy: %w", err)
+		}
 		if job.Queue == "" {
 			job.Queue = DefaultQueue
 		}

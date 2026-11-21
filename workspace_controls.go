@@ -200,6 +200,53 @@ func detailPanel(cx *core.Scope, queue *download.Queue, colors func() palette, s
 		}
 		return jobView{}
 	}
+	proxyMode, proxyURL := core.NewSignal(cx, ""), core.NewSignal(cx, "")
+	proxyError := core.NewSignal(cx, "")
+	jobID := core.NewMemo(cx, func() string { return first().ID })
+	cx.Effect(func() {
+		id := jobID.Get()
+		p := download.ProxySettings{}
+		for _, job := range queue.State().Jobs {
+			if job.ID == id {
+				p = job.Proxy
+				break
+			}
+		}
+		proxyMode.Set(p.Mode)
+		proxyURL.Set(p.URL)
+		proxyError.Set("")
+	})
+	applyProxy := func() {
+		err := queue.SetJobProxy(first().ID, download.ProxySettings{Mode: proxyMode.Get(), URL: proxyURL.Get()})
+		proxyError.Set("")
+		if err != nil {
+			proxyError.Set(err.Error())
+			return
+		}
+		run(func() error { return nil })
+	}
+	proxyFailure := label("", 12, func() core.Color { return core.RGB(0xdc2626) })
+	proxyFailure.TestID = "job-proxy-error"
+	proxyFailure.ContentFunc = proxyError.Get
+	proxyFailure.MaxLines = 0
+	proxySection := core.View{Style: core.Style{Gap: 6}, Children: []core.Node{
+		core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8}, Children: []core.Node{
+			label("任务代理", 12, func() core.Color { return colors().ink }),
+			ui.Select[string]{TestID: "job-proxy-mode", Label: "任务代理", Value: proxyMode.Get,
+				Options:  []ui.Option[string]{{Value: "", Label: "跟随全局"}, {Value: "system", Label: "系统"}, {Value: "none", Label: "不使用"}, {Value: "custom", Label: "自定义"}},
+				OnChange: func(mode string) { proxyMode.Set(mode); proxyError.Set("") }},
+			compactButton("apply-job-proxy", "应用代理", applyProxy),
+		}},
+		core.Show{When: func() bool { return proxyMode.Get() == "custom" }, Then: func(*core.Scope) core.Node {
+			return core.Input{TestID: "job-proxy-url", Placeholder: "http://host:port", Value: proxyURL.Get, OnChange: proxyURL.Set,
+				Masked: true, OnSubmit: func(string) { applyProxy() },
+				Style: core.Style{Height: core.Pt(30), FontSize: 13, BorderWidth: 1, CornerRadius: 5, Padding: core.Symmetric(0, 8)},
+				StyleFunc: func() core.Style {
+					return core.Style{BorderColor: colors().line, Background: colors().paper, Color: colors().ink}
+				}}
+		}},
+		proxyFailure,
+	}}
 	summary := label("", 12, func() core.Color { return colors().muted })
 	summary.ContentFunc = func() string {
 		if n := len(selected()); n != 0 {
@@ -240,7 +287,7 @@ func detailPanel(cx *core.Scope, queue *download.Queue, colors func() palette, s
 		}
 		return job.Directory
 	}
-	return core.View{TestID: "inspector", Style: core.Style{Height: core.Pt(240), Borders: core.Edges{Top: 1}},
+	return core.View{TestID: "inspector", Style: core.Style{Height: core.Pt(320), Borders: core.Edges{Top: 1}},
 		StyleFunc: func() core.Style { return core.Style{BorderColor: colors().line} },
 		Children: []core.Node{header, core.View{Style: core.Style{Gap: 12, Padding: core.All(12)}, Children: []core.Node{
 			core.Show{When: func() bool { return len(selected()) == 1 }, Else: func(*core.Scope) core.Node { return summary },
@@ -269,7 +316,7 @@ func detailPanel(cx *core.Scope, queue *download.Queue, colors func() palette, s
 										Children: append([]core.Node{progress, core.View{Style: core.Style{FlexGrow: 1}}, connections}, buttons...)},
 									progressBars(colors, first, 10), failure,
 								}}
-							}},
+							}}, proxySection,
 					}}
 				}},
 		}}}}

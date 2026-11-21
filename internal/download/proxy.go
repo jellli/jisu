@@ -51,6 +51,13 @@ func normalizeProxy(p ProxySettings) (ProxySettings, error) {
 
 func (q *Queue) proxyForRequest(req *http.Request) (*url.URL, error) {
 	p := q.proxy.Load().(ProxySettings)
+	if id, ok := req.Context().Value(jobProxyKey{}).(string); ok {
+		q.mu.Lock()
+		if job := q.findLocked(id); job != nil && job.Proxy.Mode != "" {
+			p = job.Proxy
+		}
+		q.mu.Unlock()
+	}
 	switch p.Mode {
 	case "none":
 		return nil, nil
@@ -59,6 +66,36 @@ func (q *Queue) proxyForRequest(req *http.Request) (*url.URL, error) {
 	default:
 		return systemProxy(req)
 	}
+}
+
+type jobProxyKey struct{}
+
+func normalizeJobProxy(p ProxySettings) (ProxySettings, error) {
+	if p.Mode == "" {
+		return ProxySettings{}, nil
+	}
+	return normalizeProxy(p)
+}
+
+func (q *Queue) SetJobProxy(id string, p ProxySettings) error {
+	p, err := normalizeJobProxy(p)
+	if err != nil {
+		return err
+	}
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	job := q.findLocked(id)
+	if q.closed || job == nil {
+		return errors.New("download is unavailable")
+	}
+	old := job.Proxy
+	job.Proxy = p
+	if err := q.saveLocked(); err != nil {
+		job.Proxy = old
+		return err
+	}
+	q.client.CloseIdleConnections()
+	return nil
 }
 
 func systemProxy(req *http.Request) (*url.URL, error) {

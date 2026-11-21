@@ -117,6 +117,79 @@ func TestSelectingCustomProxyDoesNotApply(t *testing.T) {
 	app.WaitFor("id:settings-dialog >> text:/proxy URL must use/", time.Second)
 }
 
+func TestJobProxyInspector(t *testing.T) {
+	dir := t.TempDir()
+	queue, err := download.Open(filepath.Join(dir, "queue.json"), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(queue.Close)
+	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "file") }))
+	defer endpoint.Close()
+	for _, name := range []string{"one", "two"} {
+		if err := queue.Add(endpoint.URL + "/" + name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ids := []string{queue.State().Jobs[0].ID, queue.State().Jobs[1].ID}
+	app := nsgotest.Start(t, func(cx *core.Scope) core.Node {
+		index := core.NewSignal(cx, -1)
+		selected := func() []jobView {
+			if index.Get() < 0 {
+				return nil
+			}
+			return []jobView{{Job: queue.State().Jobs[index.Get()]}}
+		}
+		return core.View{Children: []core.Node{
+			compactButton("select-one", "One", func() { index.Set(0) }),
+			compactButton("select-two", "Two", func() { index.Set(1) }),
+			detailPanel(cx, queue, func() palette {
+				return palette{ink: core.RGB(0x18181b), paper: core.RGB(0xffffff), line: core.RGB(0xe4e4e7)}
+			}, selected,
+				func(f func() error) bool { return f() == nil }),
+		}}
+	}, nsgotest.Size(1100, 680), nsgotest.Idiom(core.IdiomDesktop), nsgotest.Measure())
+	app.WaitForGone("id:job-proxy-mode", time.Second)
+	app.Press("id:select-one")
+	app.Press("id:job-proxy-mode")
+	app.Press("id:job-proxy-mode-3")
+	app.WaitFor("id:job-proxy-url", time.Second)
+	if queue.State().Jobs[0].Proxy.Mode != "" {
+		t.Fatal("selection applied proxy")
+	}
+	app.Type("id:job-proxy-url", "bad")
+	app.Press("id:apply-job-proxy")
+	app.WaitFor("id:inspector >> text:/proxy URL must use/", time.Second)
+	if queue.State().Jobs[0].Proxy.Mode != "" {
+		t.Fatal("invalid input changed proxy")
+	}
+	app.Clear("id:job-proxy-url")
+	app.Type("id:job-proxy-url", "http://user:secret@localhost:8080")
+	app.Press("id:apply-job-proxy")
+	if got := queue.State().Jobs[0].Proxy; got.Mode != "custom" || got.URL != "http://user:secret@localhost:8080" {
+		t.Fatalf("saved proxy = %+v", got)
+	}
+	if nsgotest.Target() != "" {
+		app.Screenshot("job-proxy-custom")
+	}
+	app.Press("id:select-two")
+	app.WaitForGone("id:job-proxy-url", time.Second)
+	app.Press("id:job-proxy-mode")
+	app.Press("id:job-proxy-mode-2")
+	app.Press("id:apply-job-proxy")
+	if queue.State().Jobs[1].Proxy.Mode != "none" || queue.State().Jobs[0].Proxy.Mode != "custom" {
+		t.Fatalf("job overrides not isolated: %v", ids)
+	}
+	app.Press("id:select-one")
+	app.WaitFor("id:job-proxy-url", time.Second)
+	app.Press("id:job-proxy-mode")
+	app.Press("id:job-proxy-mode-0")
+	app.Press("id:apply-job-proxy")
+	if queue.State().Jobs[0].Proxy != (download.ProxySettings{}) {
+		t.Fatal("inherit did not clear override")
+	}
+}
+
 func TestWorkspaceUpdateCheck(t *testing.T) {
 	if nsgotest.Target() != "" {
 		t.Skip("update responses are simulated only by the headless driver")

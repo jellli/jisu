@@ -131,6 +131,7 @@ func (b *bodyWithTimeout) Close() error {
 }
 
 func (q *Queue) transfer(ctx context.Context, run *attempt, job *record) error {
+	ctx = context.WithValue(ctx, jobProxyKey{}, job.ID)
 	ctx = context.WithValue(ctx, throttleKey{}, newRequestThrottle())
 	dir := partialDirectory(job)
 	assembly := filepath.Join(dir, "assembled")
