@@ -171,12 +171,6 @@ func workspaceSniff(cx *core.Scope, queue *download.Queue, colors func() palette
 				}},
 			statusText,
 			core.Show{When: func() bool { return len(resources.Get()) > 0 }, Then: func(*core.Scope) core.Node {
-				options := []ui.Option[string]{{Label: "全部类型", Value: ""}}
-				for _, f := range categoryFilters {
-					options = append(options, ui.Option[string]{Label: f.label, Value: f.key})
-				}
-				options[1].Label = "视频"
-				options = append(options, ui.Option[string]{Label: "音频", Value: "audio"})
 				return core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 12}, Children: []core.Node{
 					ui.Checkbox{TestID: "sniff-select-all", Text: "全选当前类型", Checked: func() bool {
 						return len(visible()) > 0 && !slices.ContainsFunc(visible(), func(item download.PageResource) bool { return !selected.Get()[item.URL] })
@@ -194,7 +188,7 @@ func workspaceSniff(cx *core.Scope, queue *download.Queue, colors func() palette
 						}
 						selected.Set(next)
 					}},
-					ui.Select[string]{TestID: "sniff-type", Label: "资源类型", Options: options, Value: kind.Get, OnChange: kind.Set},
+					ui.Select[string]{TestID: "sniff-type", Label: "资源类型", Options: sniffTypeOptions, Value: kind.Get, OnChange: kind.Set},
 				}}
 			}},
 			core.Show{When: func() bool { return len(resources.Get()) != 0 }, Then: func(*core.Scope) core.Node {
@@ -239,6 +233,16 @@ func workspaceSniff(cx *core.Scope, queue *download.Queue, colors func() palette
 		},
 		Footer: []core.Node{compactButton("sniff-close", "关闭", closeDialog), downloadButton},
 	}
+}
+
+var sniffTypeOptions = []ui.Option[string]{
+	{Label: "全部类型", Value: ""},
+	{Label: "视频", Value: "video"},
+	{Label: "音频", Value: "audio"},
+	{Label: "压缩包", Value: "archive"},
+	{Label: "安装镜像", Value: "iso"},
+	{Label: "文档", Value: "document"},
+	{Label: "其他文件", Value: "other"},
 }
 
 func sniffResources(items []download.PageResource, kind string) []download.PageResource {
