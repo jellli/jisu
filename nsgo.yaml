@@ -1,6 +1,6 @@
 name: jisu
 id: com.jellli.jisu
-version: 0.3.0
+version: 0.3.1
 release:
   github: jellli/jisu
 updates:
