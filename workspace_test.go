@@ -300,10 +300,10 @@ func TestSettingsFormSavesChanges(t *testing.T) {
 	}
 	app.Clear("id:proxy-url")
 	app.Type("id:proxy-url", "localhost:8081")
-	app.Key("Escape")
+	app.Press("id:close-settings")
 	app.WaitForGone("id:settings-dialog", time.Second)
-	if queue.State().Proxy.URL != "http://localhost:8080" {
-		t.Fatal("escaping shouldn't save a pending address edit")
+	if queue.State().Proxy.URL != "http://localhost:8081" {
+		t.Fatal("closing settings didn't save the pending address")
 	}
 	app.Press("id:new-queue")
 	app.Type("id:queue-name", "测试队列")
