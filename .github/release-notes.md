@@ -1,8 +1,11 @@
 ## Highlights
 
-- **Page link sniffing:** Click **嗅探网页** in the toolbar and paste a web page URL. jisu lists direct file links from the page so you can select which files to add to your download queue. The page fetch uses your download proxy settings. Links that require JavaScript and HLS playlists are not supported. ([#22](https://github.com/jellli/jisu/pull/22))
+- **Download list:** Sort by column, double-click a completed download to open it, or open its folder from the right-click menu. Failed downloads show what went wrong and can be retried from the list. ([#24](https://github.com/jellli/jisu/pull/24), [#27](https://github.com/jellli/jisu/pull/27))
+- **Per-download proxy:** Override the global proxy for an individual download with system settings, a direct connection, or a custom proxy. ([#25](https://github.com/jellli/jisu/pull/25))
+- **Workspace:** New icons, grouped settings, clearer download details and connection counts, and queue creation from the sidebar. ([#26](https://github.com/jellli/jisu/pull/26), [#28](https://github.com/jellli/jisu/pull/28))
+- **New downloads and page links:** Prefill the new-download dialog from a URL on the clipboard, and filter discovered page links by file type or select all links of the current type. Empty files now report their size correctly. ([#29](https://github.com/jellli/jisu/pull/29))
 
-- **Already on v0.3.0?** Open **Settings (设置) > Check for Updates (检查更新)** to install v<version> from within jisu, or wait for the daily background check.
+- **Already on v0.3.0 or v0.3.1?** Open **Settings (设置) > Check for Updates (检查更新)** to install v<version> from within jisu, or wait for the daily background check.
 - **New to jisu or still on v0.2.0?** Download and install v<version> manually using the guide below. After that, future updates are available in the app.
 
 ## Install
