@@ -166,7 +166,7 @@ func workspaceTable(cx *core.Scope, queue *download.Queue, colors func() palette
 				},
 				Else: func(*core.Scope) core.Node {
 					title := label("", 11, func() core.Color { return colors().muted })
-					title.ContentFunc = func() string { return cell().Title }
+					title.ContentFunc = func() string { return sortHeaderTitle(cell().Title, cell().Key, sortOrder.Get()) }
 					title.StyleFunc = func() core.Style {
 						return core.Style{Color: colors().muted, TextAlign: columnAlignment(cell().Column)}
 					}

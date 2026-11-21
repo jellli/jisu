@@ -11,6 +11,16 @@ import (
 	"github.com/nsgo-dev/nsgo/core"
 )
 
+func sortHeaderTitle(title, key string, order datatable.Sort) string {
+	if key != order.Key || order.Key == "" {
+		return title
+	}
+	if order.Descending {
+		return title + " ↓"
+	}
+	return title + " ↑"
+}
+
 func tableColumns(width core.Points) []datatable.Column {
 	out := slices.Clone(columns)
 	var total core.Points

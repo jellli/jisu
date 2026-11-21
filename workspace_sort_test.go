@@ -9,6 +9,23 @@ import (
 	"github.com/nsgo-dev/nsgo/core"
 )
 
+func TestSortHeaderTitle(t *testing.T) {
+	for _, tt := range []struct {
+		order datatable.Sort
+		want  string
+	}{
+		{datatable.Sort{}, "大小"},
+		{datatable.Sort{Key: "name"}, "大小"},
+		{datatable.Sort{Key: "name", Descending: true}, "大小"},
+		{datatable.Sort{Key: "size"}, "大小 ↑"},
+		{datatable.Sort{Key: "size", Descending: true}, "大小 ↓"},
+	} {
+		if got := sortHeaderTitle("大小", "size", tt.order); got != tt.want {
+			t.Errorf("order %+v: got %q, want %q", tt.order, got, tt.want)
+		}
+	}
+}
+
 func TestSortJobs(t *testing.T) {
 	small, large := int64(100), int64(1000)
 	a := jobView{Job: download.Job{ID: "a", Name: "Alpha", Total: &small, Received: 10, BytesPerSecond: 1}}
