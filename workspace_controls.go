@@ -47,6 +47,7 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 	cx.OnKey("mod+n", openNew)
 	newButton := compactButton("new-download", "＋ 新建下载", openNew)
 	newButton.Variant = ui.ButtonPrimary
+	sniffButton, sniffDialog := workspaceSniff(cx, queue, colors, active, run, message.Set)
 	resume := compactButton("resume-all", "▶ 开始全部", func() { apply(all(), canResume, queue.Resume) })
 	resume.Disabled = func() bool { return !slices.ContainsFunc(all(), canResume) }
 	pause := compactButton("pause-all", "Ⅱ 暂停全部", func() { apply(all(), canPause, queue.Pause) })
@@ -66,7 +67,7 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 		Padding: core.Symmetric(0, 12), Borders: core.Edges{Bottom: 1}, Gap: 6},
 		StyleFunc: func() core.Style { return core.Style{Background: colors().chrome, BorderColor: colors().line} },
 		Children: []core.Node{
-			brand, newButton, resume, pause, trash,
+			brand, newButton, sniffButton, resume, pause, trash,
 			core.View{Style: core.Style{FlexGrow: 1}}, searchField,
 			compactButton("settings", "设置", func() {
 				message.Set("")
@@ -117,6 +118,7 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 	folder := label("", 12, func() core.Color { return colors().muted })
 	folder.ContentFunc = directory
 	return toolbar, []core.Node{
+		sniffDialog,
 		ui.Dialog{Open: newJob.Get, OnOpenChange: changeOpen(newJob), Title: "新建下载", TestID: "add-dialog",
 			Description: "输入 HTTP 或 HTTPS 下载链接",
 			Children: []core.Node{input("download-url", "https://", url, add), core.Dynamic(func(*core.Scope) core.Node {

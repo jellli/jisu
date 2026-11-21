@@ -18,6 +18,52 @@ import (
 
 func TestMain(m *testing.M) { nsgotest.Main(m) }
 
+func TestWorkspaceSniffPageDownloadsSelectionThroughProxy(t *testing.T) {
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.String() {
+		case "http://page.invalid/folder/index.html":
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprint(w, `<a href="archive.zip">Archive</a><video src="clip.mp4"></video><a href="stream.m3u8">Stream</a>`)
+		case "http://page.invalid/folder/clip.mp4":
+			fmt.Fprint(w, "video content")
+		default:
+			t.Errorf("unexpected proxy request: %s", r.URL)
+			http.NotFound(w, r)
+		}
+	}))
+	defer proxy.Close()
+	dir := t.TempDir()
+	queue, err := download.Open(filepath.Join(dir, "queue.json"), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer queue.Close()
+	if err := queue.SetProxy(download.ProxySettings{Mode: "custom", URL: proxy.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	app := nsgotest.Start(t, workspace(queue), nsgotest.Size(1100, 680), nsgotest.Idiom(core.IdiomDesktop), nsgotest.Measure())
+	app.Press("id:sniff-page")
+	app.Type("id:sniff-url", "http://page.invalid/folder/index.html")
+	app.Press("id:sniff-start")
+	app.WaitFor("id:sniff-dialog >> text:archive.zip (.zip)", 3*time.Second)
+	app.WaitFor("id:sniff-dialog >> text:http://page.invalid/folder/clip.mp4", 3*time.Second)
+	if got := len(queue.State().Jobs); got != 0 {
+		t.Fatalf("sniffing started %d downloads before selection", got)
+	}
+	app.PressAt("id:sniff-resource-1", core.Point{X: 8, Y: 8})
+	app.Press("id:sniff-download")
+	app.WaitForGone("id:sniff-dialog", 3*time.Second)
+	app.WaitUntil(3*time.Second, func() bool {
+		jobs := queue.State().Jobs
+		return len(jobs) == 1 && jobs[0].State == download.Completed
+	})
+	job := queue.State().Jobs[0]
+	if job.URL != "http://page.invalid/folder/clip.mp4" || job.Name != "clip.mp4" || job.Queue != download.DefaultQueue {
+		t.Fatalf("unexpected selected download: %+v", job)
+	}
+}
+
 func TestProxySettingsDialog(t *testing.T) {
 	dir := t.TempDir()
 	queue, err := download.Open(filepath.Join(dir, "queue.json"), dir)
