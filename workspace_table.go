@@ -241,7 +241,7 @@ func workspaceTable(cx *core.Scope, queue *download.Queue, colors func() palette
 				}
 				selection.Set(ids)
 			} else if press.Clicks == 1 {
-				if press.Column >= 0 && press.Column < len(columns) && columns[press.Column].Key == "eta" && rowAt(press.Row).State == download.Failed {
+				if press.Modifiers == (core.Modifiers{}) && press.Column >= 0 && press.Column < len(columns) && columns[press.Column].Key == "eta" && rowAt(press.Row).State == download.Failed {
 					run(func() error { return queue.Resume(rowAt(press.Row).ID) })
 					return
 				}
