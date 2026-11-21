@@ -250,7 +250,7 @@ func detailPanel(cx *core.Scope, queue *download.Queue, colors func() palette, s
 	summary := label("", 12, func() core.Color { return colors().muted })
 	summary.ContentFunc = func() string {
 		if n := len(selected()); n != 0 {
-			return fmt.Sprintf("已选 %d 项任务", n)
+			return fmt.Sprintf("多选任务：%d", n)
 		}
 		return "请在上方列表选择一个任务以检视详情"
 	}
@@ -265,7 +265,7 @@ func detailPanel(cx *core.Scope, queue *download.Queue, colors func() palette, s
 	progress := label("", 12, func() core.Color { return colors().muted })
 	progress.ContentFunc = func() string {
 		j := first()
-		return "已下载 " + formatBytes(float64(j.Received)) + " / " + cellText(j, "size")
+		return "已下载 " + formatBytes(float64(j.Received)) + " / " + cellText(j, "size") + " · " + cellText(j, "progress") + " · " + cellText(j, "speed")
 	}
 	failure := label("", 12, func() core.Color { return core.RGB(0xdc2626) })
 	failure.ContentFunc = func() string { return first().Error }
@@ -287,12 +287,14 @@ func detailPanel(cx *core.Scope, queue *download.Queue, colors func() palette, s
 		}
 		return job.Directory
 	}
+	url := label("", 11, func() core.Color { return colors().muted })
+	url.ContentFunc = func() string { return first().URL }
 	return core.View{TestID: "inspector", Style: core.Style{Height: core.Pt(320), Borders: core.Edges{Top: 1}},
 		StyleFunc: func() core.Style { return core.Style{BorderColor: colors().line} },
 		Children: []core.Node{header, core.View{Style: core.Style{Gap: 12, Padding: core.All(12)}, Children: []core.Node{
 			core.Show{When: func() bool { return len(selected()) == 1 }, Else: func(*core.Scope) core.Node { return summary },
 				Then: func(*core.Scope) core.Node {
-					return core.View{Style: core.Style{Gap: 11}, Children: []core.Node{name,
+					return core.View{Style: core.Style{Gap: 8}, Children: []core.Node{name, url, path,
 						core.Show{When: tab.Get,
 							Then: func(*core.Scope) core.Node {
 								reveal := compactButton("reveal", "在文件夹中显示", func() {
@@ -308,7 +310,7 @@ func detailPanel(cx *core.Scope, queue *download.Queue, colors func() palette, s
 									})
 								})
 								reveal.Disabled = func() bool { return first().State != download.Completed }
-								return core.View{Style: core.Style{Gap: 8}, Children: []core.Node{path, reveal}}
+								return core.View{Style: core.Style{Gap: 8}, Children: []core.Node{reveal}}
 							},
 							Else: func(*core.Scope) core.Node {
 								return core.View{Style: core.Style{Gap: 8}, Children: []core.Node{
