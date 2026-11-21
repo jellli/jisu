@@ -24,6 +24,9 @@ func tableColumns(width core.Points) []datatable.Column {
 }
 
 func jobProgress(job jobView) float64 {
+	if job.State == download.Completed {
+		return 1
+	}
 	if job.Total == nil || *job.Total <= 0 {
 		return -1
 	}
