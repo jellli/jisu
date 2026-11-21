@@ -57,13 +57,13 @@ func (f filter) icon() func() *core.SVG {
 
 func fileCategory(name string) string {
 	switch strings.ToLower(filepath.Ext(name)) {
-	case ".mp4", ".m4v", ".mkv", ".mov", ".webm", ".avi", ".mp3", ".flac", ".wav", ".m4a", ".ogg":
+	case ".mp4", ".m4v", ".mkv", ".mov", ".webm", ".avi", ".mpg", ".mpeg", ".wmv", ".mp3", ".flac", ".wav", ".m4a", ".ogg", ".opus", ".aac", ".wma":
 		return "video"
-	case ".zip", ".7z", ".rar", ".tar", ".gz", ".bz2", ".xz", ".zst", ".tgz":
+	case ".zip", ".7z", ".rar", ".tar", ".gz", ".bz2", ".xz", ".zst", ".tgz", ".tbz2", ".txz":
 		return "archive"
 	case ".iso", ".img", ".dmg":
 		return "iso"
-	case ".pdf", ".doc", ".docx", ".odt", ".txt", ".xls", ".xlsx", ".csv", ".ppt", ".pptx", ".epub", ".md":
+	case ".pdf", ".doc", ".docx", ".odt", ".rtf", ".txt", ".xls", ".xlsx", ".ods", ".csv", ".ppt", ".pptx", ".odp", ".epub", ".md":
 		return "document"
 	default:
 		return "other"

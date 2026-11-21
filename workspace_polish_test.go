@@ -73,6 +73,33 @@ func TestSniffResources(t *testing.T) {
 	}
 }
 
+func TestSniffResourceExtensions(t *testing.T) {
+	for kind, extensions := range map[string]string{
+		"audio":    "mp3 flac wav m4a ogg opus aac wma",
+		"video":    "mp4 m4v mkv mov webm avi mpg mpeg wmv",
+		"archive":  "zip 7z rar tar gz bz2 xz zst tgz tbz2 txz",
+		"iso":      "iso img dmg",
+		"document": "pdf doc docx odt rtf txt xls xlsx ods csv ppt pptx odp epub md",
+		"other":    "exe msi msix apk appimage deb rpm pkg jpg jpeg png gif webp avif svg bmp tif tiff ico heic",
+	} {
+		for _, ext := range strings.Fields(extensions) {
+			for _, name := range []string{"file." + ext, "file." + strings.ToUpper(ext)} {
+				items := []download.PageResource{{Name: name}}
+				if got := sniffResources(items, kind); len(got) != 1 {
+					t.Errorf("%s: not in %s filter", name, kind)
+				}
+				want := kind
+				if kind == "audio" {
+					want = "video"
+				}
+				if got := fileCategory(name); got != want {
+					t.Errorf("fileCategory(%q) = %s, want %s", name, got, want)
+				}
+			}
+		}
+	}
+}
+
 func TestStatusActivityAndLowProgress(t *testing.T) {
 	jobs := []jobView{{Job: download.Job{State: download.Downloading}}, {Job: download.Job{State: download.Queued}}, {Job: download.Job{State: download.Paused}}}
 	colors := func() palette { return palette{} }

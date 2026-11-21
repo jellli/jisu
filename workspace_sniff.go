@@ -253,7 +253,7 @@ func sniffResources(items []download.PageResource, kind string) []download.PageR
 	for _, item := range items {
 		category := fileCategory(item.Name)
 		switch strings.ToLower(filepath.Ext(item.Name)) {
-		case ".mp3", ".flac", ".wav", ".m4a", ".ogg":
+		case ".mp3", ".flac", ".wav", ".m4a", ".ogg", ".opus", ".aac", ".wma":
 			category = "audio"
 		}
 		if category == kind {
