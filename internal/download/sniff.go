@@ -12,6 +12,7 @@ import (
 	"path"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
@@ -53,12 +54,10 @@ func (q *Queue) SniffPage(ctx context.Context, rawURL string) ([]PageResource, e
 	if len(body) > maxPageBytes {
 		return nil, errors.New("HTML page is larger than 4 MiB")
 	}
-	if len(body) == 0 {
-		return nil, nil
-	}
-	decoded, err := charset.NewReader(bytes.NewReader(body), header)
-	if err != nil {
-		return nil, err
+	encoding, _, certain := charset.DetermineEncoding(body, header)
+	var decoded io.Reader = bytes.NewReader(body)
+	if certain || !utf8.Valid(body) {
+		decoded = encoding.NewDecoder().Reader(decoded)
 	}
 	doc, err := html.Parse(decoded)
 	if err != nil {
