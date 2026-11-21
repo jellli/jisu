@@ -2,6 +2,7 @@ package download
 
 import (
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -58,6 +59,10 @@ func (q *Queue) proxyForRequest(req *http.Request) (*url.URL, error) {
 		}
 		q.mu.Unlock()
 	}
+	return proxyForSettings(req, p)
+}
+
+func proxyForSettings(req *http.Request, p ProxySettings) (*url.URL, error) {
 	switch p.Mode {
 	case "none":
 		return nil, nil
@@ -95,7 +100,88 @@ func (q *Queue) SetJobProxy(id string, p ProxySettings) error {
 		return err
 	}
 	q.client.CloseIdleConnections()
+	q.pruneJobTransportsLocked()
 	return nil
+}
+
+type jobProxyTransport struct {
+	queue    *Queue
+	fallback http.RoundTripper
+}
+
+func (t jobProxyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	q := t.queue
+	id, _ := req.Context().Value(jobProxyKey{}).(string)
+	q.mu.Lock()
+	job := q.findLocked(id)
+	base, ok := t.fallback.(*http.Transport)
+	if job == nil || job.Proxy.Mode == "" || !ok || q.closed {
+		q.mu.Unlock()
+		return t.fallback.RoundTrip(req)
+	}
+	p := job.Proxy
+	transport := q.jobTransports[p]
+	if transport == nil {
+		transport = base.Clone()
+		transport.Proxy = func(req *http.Request) (*url.URL, error) { return proxyForSettings(req, p) }
+		if q.jobTransports == nil {
+			q.jobTransports = make(map[ProxySettings]*http.Transport)
+		}
+		q.jobTransports[p] = transport
+	}
+	q.mu.Unlock()
+	cleanup := func() {
+		q.mu.Lock()
+		retired := q.jobTransports[p] != transport
+		q.mu.Unlock()
+		if retired {
+			transport.CloseIdleConnections()
+		}
+	}
+	resp, err := transport.RoundTrip(req)
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+	resp.Body = &jobProxyBody{ReadCloser: resp.Body, cleanup: cleanup}
+	return resp, nil
+}
+
+type jobProxyBody struct {
+	io.ReadCloser
+	cleanup func()
+}
+
+func (b *jobProxyBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	if err != nil {
+		b.cleanup()
+	}
+	return n, err
+}
+
+func (b *jobProxyBody) Close() error {
+	err := b.ReadCloser.Close()
+	b.cleanup()
+	return err
+}
+
+func (q *Queue) pruneJobTransportsLocked() {
+	for p, transport := range q.jobTransports {
+		used := false
+		if !q.closed {
+			for _, job := range q.config.Jobs {
+				if job.Proxy == p {
+					used = true
+					break
+				}
+			}
+		}
+		if !used {
+			delete(q.jobTransports, p)
+			transport.CloseIdleConnections()
+		}
+	}
 }
 
 func systemProxy(req *http.Request) (*url.URL, error) {

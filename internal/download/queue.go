@@ -76,15 +76,16 @@ type attempt struct {
 }
 
 type Queue struct {
-	proxy      atomic.Value
-	mu         sync.Mutex
-	workers    sync.WaitGroup
-	config     config
-	active     map[string]*attempt
-	file       string
-	client     *http.Client
-	closed     bool
-	retryDelay func(int) time.Duration
+	proxy         atomic.Value
+	mu            sync.Mutex
+	workers       sync.WaitGroup
+	config        config
+	active        map[string]*attempt
+	file          string
+	client        *http.Client
+	jobTransports map[ProxySettings]*http.Transport
+	closed        bool
+	retryDelay    func(int) time.Duration
 }
 
 func Open(stateFile, directory string) (*Queue, error) {
@@ -147,6 +148,7 @@ func Open(stateFile, directory string) (*Queue, error) {
 func (q *Queue) Close() {
 	q.mu.Lock()
 	q.closed = true
+	q.pruneJobTransportsLocked()
 	for _, run := range q.active {
 		run.cancel()
 	}
@@ -258,6 +260,7 @@ func (q *Queue) Remove(id string) error {
 			q.config.Jobs = old
 			return err
 		}
+		q.pruneJobTransportsLocked()
 		if run := q.active[id]; run != nil {
 			run.cancel()
 			return nil

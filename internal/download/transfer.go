@@ -96,7 +96,13 @@ func (q *Queue) requestOnce(ctx context.Context, rawURL, byteRange, validator st
 	if validator != "" {
 		req.Header.Set("If-Range", validator)
 	}
-	resp, err := q.client.Do(req)
+	client := q.client
+	if _, ok := ctx.Value(jobProxyKey{}).(string); ok {
+		copy := *client
+		copy.Transport = jobProxyTransport{queue: q, fallback: client.Transport}
+		client = &copy
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		cancel()
 		var urlErr *url.Error
