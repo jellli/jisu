@@ -14,7 +14,7 @@ import (
 )
 
 func workspaceSniff(cx *core.Scope, queue *download.Queue, colors func() palette, active func() filter,
-	run func(func() error) bool, notify func(string)) (core.Node, core.Node) {
+	run func(func() error) bool, notify func(string)) (ui.Button, core.Node) {
 	open := core.NewSignal(cx, false)
 	pageURL := core.NewSignal(cx, "")
 	status := core.NewSignal(cx, "")

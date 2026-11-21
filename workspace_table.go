@@ -10,6 +10,7 @@ import (
 	"github.com/nsgo-dev/nsgo/base/datatable"
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/desktop"
+	"github.com/nsgo-dev/nsgo/icons/lucide"
 	"github.com/nsgo-dev/nsgo/ui"
 )
 
@@ -17,7 +18,7 @@ const segmentCount = 16
 
 var columns = []datatable.Column{
 	{Key: "selection", Title: " ", Width: 37, Fixed: true, NoResize: true, NoMove: true, NoSelect: true, Align: datatable.AlignCenterColumn},
-	{Key: "name", Title: "文件名 / 协议", Width: 266, MinWidth: 130},
+	{Key: "name", Title: "文件名", Width: 266, MinWidth: 130},
 	{Key: "size", Title: "大小", Width: 96, MinWidth: 67, Align: datatable.AlignEndColumn},
 	{Key: "progress", Title: "进度与分块", Width: 210, MinWidth: 135},
 	{Key: "speed", Title: "速度", Width: 105, MinWidth: 88, Align: datatable.AlignEndColumn},
@@ -263,16 +264,21 @@ func columnAlignment(i int) core.TextAlign {
 }
 
 func nameCell(colors func() palette, get func() jobView, name core.Text) core.Node {
-	tag := label("", 10, func() core.Color { return colors().muted })
-	tag.ContentFunc = func() string { scheme, _ := protocol(get()); return scheme }
-	tag.Style = core.Style{FontSize: 10, BorderWidth: 1, CornerRadius: 3, Padding: core.Symmetric(1, 4)}
-	tag.StyleFunc = func() core.Style {
-		return core.Style{Color: colors().muted, BorderColor: colors().line, Background: colors().chrome}
-	}
+	icon := ui.IconOf(func() *core.SVG {
+		if get().State == download.Failed {
+			return lucide.CircleAlert()
+		}
+		return categoryIcons[fileCategory(get().Name)]()
+	}, 16, func() core.Color {
+		if get().State == download.Failed {
+			return core.RGB(0xdc2626)
+		}
+		return colors().muted
+	})
 	host := label("", 10, func() core.Color { return colors().muted })
 	host.ContentFunc = func() string { _, h := protocol(get()); return h }
 	return core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 7, MinWidth: core.Pt(0), FlexShrink: 1},
-		Children: []core.Node{tag, core.View{Style: core.Style{Gap: 2, MinWidth: core.Pt(0), FlexShrink: 1}, Children: []core.Node{name, host}}}}
+		Children: []core.Node{icon, core.View{Style: core.Style{Gap: 2, MinWidth: core.Pt(0), FlexShrink: 1}, Children: []core.Node{name, host}}}}
 }
 
 func cellText(job jobView, key string) string {
