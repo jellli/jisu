@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/jellli/jisu/internal/download"
@@ -26,7 +28,7 @@ var columns = []datatable.Column{
 }
 
 func workspaceTable(cx *core.Scope, queue *download.Queue, colors func() palette, rows func() []jobView,
-	queues func() []string, selection *core.Signal[[]string], inspector, remove *core.Signal[bool],
+	queues func() []string, empty core.Node, selection *core.Signal[[]string], inspector, remove *core.Signal[bool],
 	sortOrder *core.Signal[datatable.Sort],
 	run func(func() error) bool, apply func([]jobView, func(jobView) bool, func(string) error)) core.Node {
 	width := core.NewSignal(cx, core.Points(0))
@@ -182,7 +184,7 @@ func workspaceTable(cx *core.Scope, queue *download.Queue, colors func() palette
 		RenderCell: func(_ *core.Scope, cell func() datatable.Cell) core.Node {
 			get := func() jobView { return rowAt(cell().Row) }
 			text := label("", 12, func() core.Color {
-				if cell().Key == "speed" && get().State != download.Downloading {
+				if cell().Key == "progress" {
 					return stateColor(colors(), get())
 				}
 				return colors().ink
@@ -206,13 +208,17 @@ func workspaceTable(cx *core.Scope, queue *download.Queue, colors func() palette
 					selection.Set(ids)
 				}}
 			}, Else: func(*core.Scope) core.Node {
-				return core.Show{When: func() bool { return cell().Key == "progress" }, Then: func(*core.Scope) core.Node {
-					return core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, FlexGrow: 1, Gap: 8},
-						Children: []core.Node{progressBars(colors, get, 5), text}}
+				return core.Show{When: func() bool { return cell().Key == "eta" && get().State == download.Failed }, Then: func(*core.Scope) core.Node {
+					return compactButton("retry-"+get().ID, "重试", func() { run(func() error { return queue.Resume(get().ID) }) })
 				}, Else: func(*core.Scope) core.Node {
-					return core.Show{When: func() bool { return cell().Key == "name" }, Then: func(*core.Scope) core.Node {
-						return nameCell(colors, get, text)
-					}, Else: func(*core.Scope) core.Node { return text }}
+					return core.Show{When: func() bool { return cell().Key == "progress" }, Then: func(*core.Scope) core.Node {
+						return core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, FlexGrow: 1, Gap: 8},
+							Children: []core.Node{progressBars(colors, get, 5), text}}
+					}, Else: func(*core.Scope) core.Node {
+						return core.Show{When: func() bool { return cell().Key == "name" }, Then: func(*core.Scope) core.Node {
+							return nameCell(colors, get, text)
+						}, Else: func(*core.Scope) core.Node { return text }}
+					}}
 				}}
 			}}
 		},
@@ -235,11 +241,21 @@ func workspaceTable(cx *core.Scope, queue *download.Queue, colors func() palette
 				}
 				selection.Set(ids)
 			} else if press.Clicks == 1 {
+				if press.Modifiers == (core.Modifiers{}) && press.Column >= 0 && press.Column < len(columns) && columns[press.Column].Key == "eta" && rowAt(press.Row).State == download.Failed {
+					run(func() error { return queue.Resume(rowAt(press.Row).ID) })
+					return
+				}
 				id := rowAt(press.Row).ID
 				inspector.Set(!(inspector.Get() && len(previous) == 1 && previous[0] == id))
 			}
 		},
-		Style:     core.Style{FlexGrow: 1, MinHeight: core.Pt(0)},
+		Style: core.Style{FlexGrow: 1, MinHeight: core.Pt(0)},
+		RowStyle: func(i int) core.Style {
+			if rowAt(i).State == download.Failed {
+				return core.Style{Background: colors().failed}
+			}
+			return core.Style{}
+		},
 		StyleFunc: func() core.Style { return core.Style{Background: colors().paper} },
 		StylesFunc: func() datatable.Styles {
 			p := colors()
@@ -252,7 +268,7 @@ func workspaceTable(cx *core.Scope, queue *download.Queue, colors func() palette
 			}
 		},
 		Label: "下载任务", TestID: "tasks",
-		Empty: label("没有下载任务", 12, func() core.Color { return colors().muted }),
+		Empty: empty,
 	}
 }
 
@@ -276,7 +292,20 @@ func nameCell(colors func() palette, get func() jobView, name core.Text) core.No
 		return colors().muted
 	})
 	host := label("", 10, func() core.Color { return colors().muted })
-	host.ContentFunc = func() string { _, h := protocol(get()); return h }
+	host.MaxLines = 2
+	host.ContentFunc = func() string {
+		if get().State == download.Failed {
+			return failureReason(get().Error)
+		}
+		_, h := protocol(get())
+		return h
+	}
+	host.StyleFunc = func() core.Style {
+		if get().State == download.Failed {
+			return core.Style{Color: stateColor(colors(), get())}
+		}
+		return core.Style{Color: colors().muted}
+	}
 	return core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 7, MinWidth: core.Pt(0), FlexShrink: 1},
 		Children: []core.Node{icon, core.View{Style: core.Style{Gap: 2, MinWidth: core.Pt(0), FlexShrink: 1}, Children: []core.Node{name, host}}}}
 }
@@ -293,28 +322,30 @@ func cellText(job jobView, key string) string {
 			return formatBytes(float64(*job.Total))
 		}
 	case "progress":
+		percent := "0%"
 		if job.State == download.Completed {
-			return "100%"
+			percent = "100%"
+		} else if job.Total != nil && *job.Total > 0 {
+			percent = fmt.Sprintf("%.1f%%", min(99.9, 100*float64(job.Received)/float64(*job.Total)))
 		}
-		if job.Total != nil && *job.Total > 0 {
-			return fmt.Sprintf("%.1f%%", min(99.9, 100*float64(job.Received)/float64(*job.Total)))
-		}
-		return "0%"
-	case "speed":
 		switch job.State {
 		case download.Completed:
-			return "已完成"
+			return percent + " · 已完成"
 		case download.Paused:
-			return "已暂停"
+			return percent + " · 已暂停"
 		case download.Queued:
-			return "排队中"
+			return percent + " · 排队中"
 		case download.Failed:
-			return "下载失败"
-		default:
+			return percent + " · 下载失败"
+		}
+		return percent
+	case "speed":
+		if job.State == download.Downloading {
 			return formatBytes(job.BytesPerSecond) + "/s"
 		}
+		return ""
 	case "eta":
-		if job.Total != nil && job.BytesPerSecond > 0 {
+		if job.State == download.Downloading && job.Total != nil && job.BytesPerSecond > 0 {
 			seconds := math.Ceil(float64(max(0, *job.Total-job.Received)) / job.BytesPerSecond)
 			if seconds < 24*60*60 {
 				return (time.Duration(seconds) * time.Second).String()
@@ -324,6 +355,30 @@ func cellText(job jobView, key string) string {
 		return ""
 	}
 	return "—"
+}
+
+var httpFailure = regexp.MustCompile(`(?i)\bHTTP ([45][0-9]{2})\b`)
+
+func failureReason(raw string) string {
+	if match := httpFailure.FindStringSubmatch(raw); match != nil {
+		switch match[1] {
+		case "404":
+			return "文件不存在 (404)"
+		case "403":
+			return "无权访问 (403)"
+		case "429":
+			return "请求过于频繁，被限流 (429)"
+		default:
+			return "服务器错误 (" + match[1] + ")"
+		}
+	}
+	lower := strings.ToLower(raw)
+	for _, marker := range []string{"no such host", "dns", "connection refused", "timeout", "timed out", "deadline exceeded"} {
+		if strings.Contains(lower, marker) {
+			return "连不上服务器"
+		}
+	}
+	return strings.TrimSpace(raw)
 }
 
 func segmentFill(total int64, spans []download.ByteSpan) (fill [segmentCount]float32) {
