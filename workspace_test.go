@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -13,10 +14,41 @@ import (
 
 	"github.com/jellli/jisu/internal/download"
 	"github.com/nsgo-dev/nsgo/core"
+	"github.com/nsgo-dev/nsgo/icons/lucide"
 	"github.com/nsgo-dev/nsgo/nsgotest"
 )
 
 func TestMain(m *testing.M) { nsgotest.Main(m) }
+
+func TestWorkspaceFileIconsFollowJob(t *testing.T) {
+	job := jobView{}
+	colors := func() palette { return palette{muted: core.RGB(0x64748b)} }
+	cell := nameCell(colors, func() jobView { return job }, core.Text{}).(core.View)
+	icon := cell.Children[0].(core.Icon)
+	for _, tc := range []struct {
+		name, state string
+		want        func() *core.SVG
+	}{
+		{"", "", lucide.File},
+		{"movie.mp4", download.Completed, lucide.Film},
+		{"bundle.zip", download.Paused, lucide.Archive},
+		{"image.iso", download.Completed, lucide.Disc},
+		{"notes.pdf", download.Completed, lucide.FileText},
+		{"movie.mp4", download.Failed, lucide.CircleAlert},
+	} {
+		job.Name, job.State = tc.name, tc.state
+		if !reflect.DeepEqual(icon.SVGFunc(), tc.want()) {
+			t.Errorf("%q (%s): incorrect file icon", tc.name, tc.state)
+		}
+		wantTint := colors().muted
+		if tc.state == download.Failed {
+			wantTint = core.RGB(0xdc2626)
+		}
+		if icon.StyleFunc().Color != wantTint {
+			t.Errorf("%q (%s): incorrect tint", tc.name, tc.state)
+		}
+	}
+}
 
 func TestWorkspaceSniffPageDownloadsSelectionThroughProxy(t *testing.T) {
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

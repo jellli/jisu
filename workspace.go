@@ -11,6 +11,7 @@ import (
 	"github.com/jellli/jisu/internal/download"
 	"github.com/nsgo-dev/nsgo/base/datatable"
 	"github.com/nsgo-dev/nsgo/core"
+	"github.com/nsgo-dev/nsgo/icons/lucide"
 	"github.com/nsgo-dev/nsgo/ui"
 )
 
@@ -33,6 +34,25 @@ var categoryFilters = []filter{
 	{"category", "video", "视频媒体"}, {"category", "archive", "压缩包"},
 	{"category", "iso", "安装镜像"}, {"category", "document", "文档"},
 	{"category", "other", "其他文件"},
+}
+
+var categoryIcons = map[string]func() *core.SVG{
+	"video": lucide.Film, "archive": lucide.Archive, "iso": lucide.Disc,
+	"document": lucide.FileText, "other": lucide.File,
+}
+
+func (f filter) icon() func() *core.SVG {
+	switch f.group {
+	case "category":
+		return categoryIcons[f.key]
+	case "queue":
+		return lucide.ListOrdered
+	default:
+		return map[string]func() *core.SVG{
+			"": lucide.Inbox, download.Downloading: lucide.ArrowDownToLine,
+			download.Completed: lucide.CircleCheck, download.Paused: lucide.CirclePause,
+		}[f.key]
+	}
 }
 
 func fileCategory(name string) string {
@@ -214,13 +234,13 @@ func sidebar(colors func() palette, jobs func() []jobView, queues func() []strin
 		return core.View{TestID: f.group + "-" + f.key, Role: core.RoleButton, Label: f.label,
 			OnPress: func(core.PressEvent) { selectView(f) },
 			Style: core.Style{Height: core.Pt(27), Direction: core.Row, AlignItems: core.AlignCenter,
-				Padding: core.Symmetric(0, 8), CornerRadius: 4},
+				Padding: core.Symmetric(0, 8), CornerRadius: 4, Gap: 7},
 			StyleFunc: func() core.Style {
 				if active() == f {
 					return core.Style{Background: colors().picked}
 				}
 				return core.Style{}
-			}, Children: []core.Node{title, count}}
+			}, Children: []core.Node{ui.Icon(f.icon(), 14, func() core.Color { return colors().muted }), title, count}}
 	}
 	section := func(title string, children []core.Node) core.View {
 		head := label(title, 10, func() core.Color { return colors().muted })
@@ -265,12 +285,13 @@ func statusBar(colors func() palette, rows, selected, all func() []jobView, mess
 		for _, job := range all() {
 			bytes += job.BytesPerSecond
 		}
-		return "↓ " + formatBytes(bytes) + "/s"
+		return formatBytes(bytes) + "/s"
 	}
 	return core.View{Style: core.Style{Height: core.Pt(28), Direction: core.Row, AlignItems: core.AlignCenter,
 		JustifyContent: core.JustifySpaceBetween, Gap: 10, Padding: core.Symmetric(0, 12), Borders: core.Edges{Top: 1}},
 		StyleFunc: func() core.Style { return core.Style{Background: colors().chrome, BorderColor: colors().line} },
-		Children:  []core.Node{count, err, speed}}
+		Children: []core.Node{count, err, core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 4},
+			Children: []core.Node{ui.Icon(lucide.ArrowDown, 14, func() core.Color { return colors().ink }), speed}}}}
 }
 
 func protocol(job jobView) (scheme, host string) {

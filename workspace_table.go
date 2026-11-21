@@ -10,6 +10,7 @@ import (
 	"github.com/nsgo-dev/nsgo/base/datatable"
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/desktop"
+	"github.com/nsgo-dev/nsgo/icons/lucide"
 	"github.com/nsgo-dev/nsgo/ui"
 )
 
@@ -263,16 +264,21 @@ func columnAlignment(i int) core.TextAlign {
 }
 
 func nameCell(colors func() palette, get func() jobView, name core.Text) core.Node {
-	tag := label("", 10, func() core.Color { return colors().muted })
-	tag.ContentFunc = func() string { scheme, _ := protocol(get()); return scheme }
-	tag.Style = core.Style{FontSize: 10, BorderWidth: 1, CornerRadius: 3, Padding: core.Symmetric(1, 4)}
-	tag.StyleFunc = func() core.Style {
-		return core.Style{Color: colors().muted, BorderColor: colors().line, Background: colors().chrome}
-	}
+	icon := ui.IconOf(func() *core.SVG {
+		if get().State == download.Failed {
+			return lucide.CircleAlert()
+		}
+		return categoryIcons[fileCategory(get().Name)]()
+	}, 16, func() core.Color {
+		if get().State == download.Failed {
+			return core.RGB(0xdc2626)
+		}
+		return colors().muted
+	})
 	host := label("", 10, func() core.Color { return colors().muted })
 	host.ContentFunc = func() string { _, h := protocol(get()); return h }
 	return core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 7, MinWidth: core.Pt(0), FlexShrink: 1},
-		Children: []core.Node{tag, core.View{Style: core.Style{Gap: 2, MinWidth: core.Pt(0), FlexShrink: 1}, Children: []core.Node{name, host}}}}
+		Children: []core.Node{icon, core.View{Style: core.Style{Gap: 2, MinWidth: core.Pt(0), FlexShrink: 1}, Children: []core.Node{name, host}}}}
 }
 
 func cellText(job jobView, key string) string {

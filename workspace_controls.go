@@ -8,6 +8,7 @@ import (
 	"github.com/jellli/jisu/internal/download"
 	"github.com/nsgo-dev/nsgo/base"
 	"github.com/nsgo-dev/nsgo/core"
+	"github.com/nsgo-dev/nsgo/icons/lucide"
 	"github.com/nsgo-dev/nsgo/ui"
 	"github.com/nsgo-dev/nsgo/updater"
 )
@@ -45,14 +46,18 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 		}
 	}
 	cx.OnKey("mod+n", openNew)
-	newButton := compactButton("new-download", "＋ 新建下载", openNew)
+	newButton := compactButton("new-download", "新建下载", openNew)
+	newButton.Icon = lucide.Plus
 	newButton.Variant = ui.ButtonPrimary
 	sniffButton, sniffDialog := workspaceSniff(cx, queue, colors, active, run, message.Set)
-	resume := compactButton("resume-all", "▶ 开始全部", func() { apply(all(), canResume, queue.Resume) })
+	sniffButton.Icon = lucide.Radar
+	resume := compactButton("resume-all", "开始全部", func() { apply(all(), canResume, queue.Resume) })
+	resume.Icon = lucide.Play
 	resume.Disabled = func() bool { return !slices.ContainsFunc(all(), canResume) }
-	pause := compactButton("pause-all", "Ⅱ 暂停全部", func() { apply(all(), canPause, queue.Pause) })
+	pause := compactButton("pause-all", "暂停全部", func() { apply(all(), canPause, queue.Pause) })
+	pause.Icon = lucide.Pause
 	pause.Disabled = func() bool { return !slices.ContainsFunc(all(), canPause) }
-	trash := compactButton("delete", "删除", func() { remove.Set(true) })
+	trash := ui.IconButton{TestID: "delete", Label: "删除", Icon: lucide.Trash, OnPress: func() { remove.Set(true) }}
 	trash.Disabled = func() bool { return len(selected()) == 0 }
 	brand := label("jisu", 15, func() core.Color { return colors().ink })
 	brand.Style.FontWeight = 700
@@ -69,22 +74,27 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 		Children: []core.Node{
 			brand, newButton, sniffButton, resume, pause, trash,
 			core.View{Style: core.Style{FlexGrow: 1}}, searchField,
-			compactButton("settings", "设置", func() {
+			ui.IconButton{TestID: "settings", Label: "设置", Icon: lucide.Settings, OnPress: func() {
 				message.Set("")
 				p := queue.State().Proxy
 				proxyMode.Set(p.Mode)
 				proxyURL.Set(p.URL)
 				settings.Set(true)
-			}),
-			compactButton("theme", "主题", func() {
+			}},
+			ui.IconButton{TestID: "theme", Label: "主题", Icon: func() *core.SVG {
+				if dark.Get() {
+					return lucide.Sun()
+				}
+				return lucide.Moon()
+			}, OnPress: func() {
 				dark.Set(!dark.Get())
 				if dark.Get() {
 					cx.SetAppearance(core.AppearanceDark)
 				} else {
 					cx.SetAppearance(core.AppearanceLight)
 				}
-			}),
-			compactButton("toggle-inspector", "详情", func() { inspector.Set(!inspector.Get()) }),
+			}},
+			ui.IconButton{TestID: "toggle-inspector", Label: "详情", Icon: lucide.PanelRight, OnPress: func() { inspector.Set(!inspector.Get()) }},
 		}}
 
 	changeOpen := func(open *core.Signal[bool]) func(bool, base.Reason) {
@@ -309,6 +319,7 @@ func detailPanel(cx *core.Scope, queue *download.Queue, colors func() palette, s
 										}
 									})
 								})
+								reveal.Icon = lucide.FolderOpen
 								reveal.Disabled = func() bool { return first().State != download.Completed }
 								return core.View{Style: core.Style{Gap: 8}, Children: []core.Node{reveal}}
 							},
