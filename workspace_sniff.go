@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -21,8 +22,16 @@ func workspaceSniff(cx *core.Scope, queue *download.Queue, colors func() palette
 	busy := core.NewSignal(cx, false)
 	resources := core.NewSignalFunc(cx, []download.PageResource(nil), slices.Equal)
 	selected := core.NewSignalFunc(cx, map[string]bool(nil), maps.Equal)
+	kind := core.NewSignal(cx, "")
+	sizes := core.NewSignalFunc(cx, map[string]int64(nil), maps.Equal)
+	visible := func() []download.PageResource { return sniffResources(resources.Get(), kind.Get()) }
 	parent := cx.Context()
 	var cancelScan context.CancelFunc
+	cx.Cleanup(func() {
+		if cancelScan != nil {
+			cancelScan()
+		}
+	})
 	destination := download.DefaultQueue
 	closeDialog := func() {
 		if cancelScan != nil {
@@ -41,6 +50,8 @@ func workspaceSniff(cx *core.Scope, queue *download.Queue, colors func() palette
 		status.Set("")
 		resources.Set(nil)
 		selected.Set(nil)
+		kind.Set("")
+		sizes.Set(nil)
 		busy.Set(false)
 		open.Set(true)
 	}
@@ -49,6 +60,10 @@ func workspaceSniff(cx *core.Scope, queue *download.Queue, colors func() palette
 		if busy.Get() || raw == "" {
 			return
 		}
+		if cancelScan != nil {
+			cancelScan()
+		}
+		sizes.Set(nil)
 		ctx, cancel := context.WithCancel(parent)
 		cancelScan = cancel
 		resources.Set(nil)
@@ -72,6 +87,29 @@ func workspaceSniff(cx *core.Scope, queue *download.Queue, colors func() palette
 				default:
 					resources.Set(found)
 					status.Set(fmt.Sprintf("找到 %d 个资源，将下载至%s。", len(found), queueLabel(destination)))
+					probeCtx, probeCancel := context.WithCancel(parent)
+					cancelScan = probeCancel
+					go func() {
+						for _, item := range found {
+							if probeCtx.Err() != nil {
+								return
+							}
+							info, err := queue.Probe(probeCtx, item.URL)
+							if err == nil && info.Size != nil {
+								size := *info.Size
+								cx.Post(func() {
+									if probeCtx.Err() == nil {
+										next := maps.Clone(sizes.Get())
+										if next == nil {
+											next = make(map[string]int64)
+										}
+										next[item.URL] = size
+										sizes.Set(next)
+									}
+								})
+							}
+						}
+					}()
 				}
 			})
 		}()
@@ -132,17 +170,50 @@ func workspaceSniff(cx *core.Scope, queue *download.Queue, colors func() palette
 					start,
 				}},
 			statusText,
+			core.Show{When: func() bool { return len(resources.Get()) > 0 }, Then: func(*core.Scope) core.Node {
+				options := []ui.Option[string]{{Label: "全部类型", Value: ""}}
+				for _, f := range categoryFilters {
+					options = append(options, ui.Option[string]{Label: f.label, Value: f.key})
+				}
+				options[1].Label = "视频"
+				options = append(options, ui.Option[string]{Label: "音频", Value: "audio"})
+				return core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 12}, Children: []core.Node{
+					ui.Checkbox{TestID: "sniff-select-all", Text: "全选当前类型", Checked: func() bool {
+						return len(visible()) > 0 && !slices.ContainsFunc(visible(), func(item download.PageResource) bool { return !selected.Get()[item.URL] })
+					}, OnChange: func(checked bool) {
+						next := maps.Clone(selected.Get())
+						if next == nil {
+							next = make(map[string]bool)
+						}
+						for _, item := range visible() {
+							if checked {
+								next[item.URL] = true
+							} else {
+								delete(next, item.URL)
+							}
+						}
+						selected.Set(next)
+					}},
+					ui.Select[string]{TestID: "sniff-type", Label: "资源类型", Options: options, Value: kind.Get, OnChange: kind.Set},
+				}}
+			}},
 			core.Show{When: func() bool { return len(resources.Get()) != 0 }, Then: func(*core.Scope) core.Node {
 				return core.List{TestID: "sniff-results", Style: core.Style{Height: core.Pt(226), FlexShrink: 1},
-					EstimatedSize: 54, Count: func() int { return len(resources.Get()) },
+					EstimatedSize: 54, Count: func() int { return len(visible()) },
 					Row: func(_ *core.Scope, row core.ListRow) core.Node {
 						return core.Dynamic(func(*core.Scope) core.Node {
-							i, items := row.Index(), resources.Get()
+							i, items := row.Index(), visible()
 							if i < 0 || i >= len(items) {
 								return core.View{}
 							}
 							item := items[i]
-							name := label(item.Name+" ("+item.Extension+")", 13, func() core.Color { return colors().ink })
+							name := label("", 13, func() core.Color { return colors().ink })
+							name.ContentFunc = func() string {
+								if size, ok := sizes.Get()[item.URL]; ok {
+									return item.Name + " · " + formatBytes(float64(size))
+								}
+								return item.Name
+							}
 							address := label(item.URL, 11, func() core.Color { return colors().muted })
 							address.MaxLines = 2
 							return ui.Checkbox{TestID: fmt.Sprintf("sniff-resource-%d", i), Label: item.Name,
@@ -168,4 +239,22 @@ func workspaceSniff(cx *core.Scope, queue *download.Queue, colors func() palette
 		},
 		Footer: []core.Node{compactButton("sniff-close", "关闭", closeDialog), downloadButton},
 	}
+}
+
+func sniffResources(items []download.PageResource, kind string) []download.PageResource {
+	if kind == "" {
+		return items
+	}
+	var result []download.PageResource
+	for _, item := range items {
+		category := fileCategory(item.Name)
+		switch strings.ToLower(filepath.Ext(item.Name)) {
+		case ".mp3", ".flac", ".wav", ".m4a", ".ogg":
+			category = "audio"
+		}
+		if category == kind {
+			result = append(result, item)
+		}
+	}
+	return result
 }

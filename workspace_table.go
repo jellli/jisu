@@ -141,7 +141,6 @@ func workspaceTable(cx *core.Scope, queue *download.Queue, colors func() palette
 			{Label: "上移", OnSelect: func() { run(func() error { return queue.MoveJobs(ids, true) }) }},
 			{Label: "下移", OnSelect: func() { run(func() error { return queue.MoveJobs(ids, false) }) }},
 			{Label: "移至队列", Items: destinations},
-			{Separator: true},
 			{Label: "删除", OnSelect: func() { remove.Set(true) }},
 		}, event.At, nil)
 	}
@@ -287,7 +286,7 @@ func nameCell(colors func() palette, get func() jobView, name core.Text) core.No
 		return categoryIcons[fileCategory(get().Name)]()
 	}, 16, func() core.Color {
 		if get().State == download.Failed {
-			return core.RGB(0xdc2626)
+			return errorColor(colors())
 		}
 		return colors().muted
 	})
@@ -404,7 +403,7 @@ func stateColor(p palette, job jobView) core.Color {
 	case download.Paused:
 		return core.RGB(0xd97706)
 	case download.Failed:
-		return core.RGB(0xdc2626)
+		return errorColor(p)
 	case download.Completed:
 		return core.RGB(0x16a34a)
 	case download.Queued:
@@ -430,7 +429,11 @@ func progressBars(colors func() palette, get func() jobView, height core.Points)
 				if fill >= 1 {
 					color = core.RGB(0x16a34a)
 				}
-				return core.Style{Background: color, Width: core.Pct(100 * fill)}
+				style := core.Style{Background: color, Width: core.Pct(100 * fill)}
+				if fill > 0 {
+					style.MinWidth = core.Pt(2)
+				}
+				return style
 			}}},
 		}
 	}

@@ -180,6 +180,8 @@ func TestWorkspaceSniffPageDownloadsSelectionThroughProxy(t *testing.T) {
 			fmt.Fprint(w, `<a href="archive.zip">Archive</a><video src="clip.mp4"></video><a href="stream.m3u8">Stream</a>`)
 		case "http://page.invalid/folder/clip.mp4":
 			fmt.Fprint(w, "video content")
+		case "http://page.invalid/folder/archive.zip":
+			fmt.Fprint(w, "archive content")
 		default:
 			t.Errorf("unexpected proxy request: %s", r.URL)
 			http.NotFound(w, r)
@@ -200,8 +202,16 @@ func TestWorkspaceSniffPageDownloadsSelectionThroughProxy(t *testing.T) {
 	app.Press("id:sniff-page")
 	app.Type("id:sniff-url", "http://page.invalid/folder/index.html")
 	app.Press("id:sniff-start")
-	app.WaitFor("id:sniff-dialog >> text:archive.zip (.zip)", 3*time.Second)
+	app.WaitFor("id:sniff-resource-0", 3*time.Second)
+	if len(app.Query("text:archive.zip (.zip)")) != 0 {
+		t.Fatal("extension is repeated")
+	}
 	app.WaitFor("id:sniff-dialog >> text:http://page.invalid/folder/clip.mp4", 3*time.Second)
+	app.PressAt("id:sniff-select-all", core.Point{X: 8, Y: 8})
+	if !app.Find("id:sniff-resource-0").Props.Checked || !app.Find("id:sniff-resource-1").Props.Checked {
+		t.Fatal("select all did not select every resource")
+	}
+	app.PressAt("id:sniff-select-all", core.Point{X: 8, Y: 8})
 	if got := len(queue.State().Jobs); got != 0 {
 		t.Fatalf("sniffing started %d downloads before selection", got)
 	}

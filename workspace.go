@@ -96,6 +96,13 @@ type palette struct {
 	ink, muted, line, paper, chrome, sidebar, accent, picked, track, failed core.Color
 }
 
+func errorColor(p palette) core.Color {
+	if p.paper == core.RGB(0x1c1c1e) {
+		return core.RGB(0xff8585)
+	}
+	return core.RGB(0xdc2626)
+}
+
 func workspace(queue *download.Queue) func(*core.Scope) core.Node {
 	return func(cx *core.Scope) core.Node {
 		cx.SetTitle("jisu")
@@ -138,7 +145,7 @@ func workspace(queue *download.Queue) func(*core.Scope) core.Node {
 		colors := func() palette {
 			if dark.Get() {
 				return palette{core.RGB(0xf4f4f5), core.RGB(0xa1a1aa), core.RGB(0x38383a), core.RGB(0x1c1c1e),
-					core.RGB(0x242426), core.RGB(0x202022), core.RGB(0x0a84ff), core.RGB(0x1e3a5f), core.RGB(0x38383a), core.RGB(0x352326)}
+					core.RGB(0x242426), core.RGB(0x202022), core.RGB(0x0a84ff), core.RGB(0x303c4a), core.RGB(0x38383a), core.RGB(0x352326)}
 			}
 			return palette{core.RGB(0x18181b), core.RGB(0x71717a), core.RGB(0xe4e4e7), core.RGB(0xffffff),
 				core.RGB(0xfafafa), core.RGB(0xf4f4f5), core.RGB(0x007aff), core.RGB(0xeff6ff), core.RGB(0xe4e4e7), core.RGB(0xfff1f2)}
@@ -229,6 +236,9 @@ func sidebar(colors func() palette, jobs func() []jobView, queues func() []strin
 					n++
 				}
 			}
+			if n == 0 {
+				return ""
+			}
 			return fmt.Sprint(n)
 		}
 		return core.View{TestID: f.group + "-" + f.key, Role: core.RoleButton, Label: f.label,
@@ -278,16 +288,22 @@ func statusBar(colors func() palette, rows, selected, all func() []jobView, mess
 	count := label("", 11, func() core.Color { return colors().muted })
 	count.TestID = "selection-count"
 	count.ContentFunc = func() string { return fmt.Sprintf("%d 项任务 · 已选 %d 项", len(rows()), len(selected())) }
-	err := label("", 11, func() core.Color { return core.RGB(0xdc2626) })
+	err := label("", 11, func() core.Color { return errorColor(colors()) })
 	err.ContentFunc = message
 	err.Style.FlexShrink = 1
 	speed := label("", 11, func() core.Color { return colors().ink })
 	speed.ContentFunc = func() string {
 		var bytes float64
+		var downloading, queued int
 		for _, job := range all() {
 			bytes += job.BytesPerSecond
+			if job.State == download.Downloading {
+				downloading++
+			} else if job.State == download.Queued {
+				queued++
+			}
 		}
-		return formatBytes(bytes) + "/s"
+		return fmt.Sprintf("%s/s · 下载中 %d · 排队 %d", formatBytes(bytes), downloading, queued)
 	}
 	return core.View{Style: core.Style{Height: core.Pt(28), Direction: core.Row, AlignItems: core.AlignCenter,
 		JustifyContent: core.JustifySpaceBetween, Gap: 10, Padding: core.Symmetric(0, 12), Borders: core.Edges{Top: 1}},

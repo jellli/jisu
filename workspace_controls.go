@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"net/url"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/jellli/jisu/internal/download"
 	"github.com/nsgo-dev/nsgo/base"
@@ -19,6 +22,42 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 	apply func([]jobView, func(jobView) bool, func(string) error)) (core.Node, []core.Node, core.Node, func()) {
 	newJob, newQueue := core.NewSignal(cx, false), core.NewSignal(cx, false)
 	url, destination, name := core.NewSignal(cx, ""), core.NewSignal(cx, download.DefaultQueue), core.NewSignal(cx, "")
+	preview := core.NewSignal(cx, "")
+	cx.Effect(func() {
+		raw := strings.TrimSpace(url.Get())
+		opened := newJob.Get()
+		preview.Set("")
+		if !opened || clipboardURL(raw) == "" {
+			return
+		}
+		preview.Set("正在识别文件信息…")
+		ctx, cancel := context.WithCancel(cx.Context())
+		cx.Cleanup(cancel)
+		go func() {
+			timer := time.NewTimer(350 * time.Millisecond)
+			defer timer.Stop()
+			select {
+			case <-ctx.Done():
+				return
+			case <-timer.C:
+			}
+			info, err := queue.Probe(ctx, raw)
+			cx.Post(func() {
+				if ctx.Err() != nil || !newJob.Get() || strings.TrimSpace(url.Get()) != raw {
+					return
+				}
+				if err != nil {
+					preview.Set("暂时无法识别文件信息，可直接开始下载。")
+					return
+				}
+				size := "大小未知"
+				if info.Size != nil {
+					size = formatBytes(float64(*info.Size))
+				}
+				preview.Set(info.Name + " · " + size)
+			})
+		}()
+	})
 	setDark := func(value bool) {
 		dark.Set(value)
 		if value {
@@ -37,6 +76,11 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 			destination.Set(view.key)
 		}
 		newJob.Set(true)
+		cx.ReadClipboard(func(text string) {
+			if newJob.Get() && url.Get() == "" {
+				url.Set(clipboardURL(text))
+			}
+		})
 	}
 	add := func() {
 		if run(func() error { return queue.AddToQueue(url.Get(), destination.Get()) }) {
@@ -104,8 +148,9 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 		Padding: core.Symmetric(0, 12), Borders: core.Edges{Bottom: 1}, Gap: 6},
 		StyleFunc: func() core.Style { return core.Style{Background: colors().chrome, BorderColor: colors().line} },
 		Children: []core.Node{
-			brand, newButton, sniffButton, resume, pause, trash,
+			brand, newButton, sniffButton, resume, pause,
 			core.View{Style: core.Style{FlexGrow: 1}}, searchField,
+			trash,
 			ui.IconButton{TestID: "settings", Label: "设置", Icon: lucide.Settings, OnPress: openSettings},
 			ui.IconButton{TestID: "theme", Label: "主题", Icon: func() *core.SVG {
 				if dark.Get() {
@@ -119,7 +164,7 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 	changeOpen := func(open *core.Signal[bool]) func(bool, base.Reason) {
 		return func(value bool, _ base.Reason) { open.Set(value) }
 	}
-	errorLabel := label("", 12, func() core.Color { return core.RGB(0xdc2626) })
+	errorLabel := label("", 12, func() core.Color { return errorColor(colors()) })
 	errorLabel.ContentFunc = message.Get
 	input := func(id, placeholder string, signal *core.Signal[string], submit func()) core.Node {
 		return core.Input{TestID: id, Value: signal.Get, OnChange: signal.Set, Placeholder: placeholder, AutoFocus: true,
@@ -137,12 +182,18 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 	cancel := func(open *core.Signal[bool]) ui.Button {
 		return compactButton("", "取消", func() { open.Set(false) })
 	}
+	metadata := label("", 12, func() core.Color { return colors().muted })
+	metadata.ContentFunc = preview.Get
+	metadata.MaxLines = 2
+	location := label("", 12, func() core.Color { return colors().muted })
+	location.ContentFunc = func() string { return "保存位置：" + directory() }
+	location.MaxLines = 2
 	return toolbar, []core.Node{
 		sniffDialog,
 		settingsDialog,
 		ui.Dialog{Open: newJob.Get, OnOpenChange: changeOpen(newJob), Title: "新建下载", TestID: "add-dialog",
 			Description: "输入 HTTP 或 HTTPS 下载链接",
-			Children: []core.Node{input("download-url", "https://", url, add), core.Dynamic(func(*core.Scope) core.Node {
+			Children: []core.Node{input("download-url", "https://", url, add), metadata, location, core.Dynamic(func(*core.Scope) core.Node {
 				names := queues()
 				options := make([]ui.Option[string], len(names))
 				for i, key := range names {
@@ -161,6 +212,15 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 				apply(selected(), anyJob, queue.Remove)
 			})}},
 	}, empty, openQueue
+}
+
+func clipboardURL(text string) string {
+	text = strings.TrimSpace(text)
+	u, err := url.Parse(text)
+	if err != nil || u.Hostname() == "" || u.User != nil || strings.ContainsAny(text, " \t\r\n") || (u.Scheme != "http" && u.Scheme != "https") {
+		return ""
+	}
+	return text
 }
 
 func workspaceSettings(cx *core.Scope, queue *download.Queue, colors func() palette, directory func() string, concurrency func() int,
@@ -272,7 +332,7 @@ func workspaceSettings(cx *core.Scope, queue *download.Queue, colors func() pale
 								StyleFunc: func() core.Style {
 									border := colors().line
 									if proxyError.Get() != "" {
-										border = core.RGB(0xdc2626)
+										border = errorColor(colors())
 									}
 									return core.Style{BorderColor: border, Background: colors().paper, Color: colors().ink}
 								}}}
@@ -336,7 +396,7 @@ func detailPanel(cx *core.Scope, queue *download.Queue, colors func() palette, s
 		}
 		run(func() error { return nil })
 	}
-	proxyFailure := label("", 12, func() core.Color { return core.RGB(0xdc2626) })
+	proxyFailure := label("", 12, func() core.Color { return errorColor(colors()) })
 	proxyFailure.TestID = "job-proxy-error"
 	proxyFailure.ContentFunc = proxyError.Get
 	proxyFailure.MaxLines = 0
@@ -378,7 +438,7 @@ func detailPanel(cx *core.Scope, queue *download.Queue, colors func() palette, s
 	progress.ContentFunc = func() string {
 		return downloadSummary(first())
 	}
-	failure := label("", 12, func() core.Color { return core.RGB(0xdc2626) })
+	failure := label("", 12, func() core.Color { return errorColor(colors()) })
 	failure.ContentFunc = func() string { return failureReason(first().Error) }
 	failure.MaxLines = 0
 	var targets []ui.Option[int]
