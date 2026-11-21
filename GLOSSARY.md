@@ -30,3 +30,6 @@ _Avoid_: Capture, interception
 
 **System proxy**:
 A proxy configured in the operating system's network settings, shared by applications that use those settings.
+
+**Job proxy override**:
+A saved proxy choice for one Job: System, direct, or Custom. Without an override, the Job follows the global proxy setting.
