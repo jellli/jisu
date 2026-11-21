@@ -54,9 +54,10 @@ func (q *Queue) SniffPage(ctx context.Context, rawURL string) ([]PageResource, e
 	if len(body) > maxPageBytes {
 		return nil, errors.New("HTML page is larger than 4 MiB")
 	}
-	encoding, _, certain := charset.DetermineEncoding(body, header)
+	encoding, charsetName, certain := charset.DetermineEncoding(body, header)
 	var decoded io.Reader = bytes.NewReader(body)
-	if certain || !utf8.Valid(body) {
+	useUTF8Fallback := !certain && charsetName == "windows-1252" && utf8.Valid(body)
+	if !useUTF8Fallback {
 		decoded = encoding.NewDecoder().Reader(decoded)
 	}
 	doc, err := html.Parse(decoded)

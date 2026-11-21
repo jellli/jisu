@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"golang.org/x/text/encoding/simplifiedchinese"
 )
@@ -97,15 +98,23 @@ func TestSniffPageDecodesGBKLinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ambiguousGBK, err := simplifiedchinese.GBK.NewEncoder().Bytes([]byte(`<a href="茅.zip">Download</a>`))
+	if err != nil || !utf8.Valid(ambiguousGBK) {
+		t.Fatalf("expected GBK fixture to also be valid UTF-8, got %x, error %v", ambiguousGBK, err)
+	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/folder/header":
 			w.Header().Set("Content-Type", "text/html; charset=GBK")
-		case "/folder/meta":
+		default:
 			w.Header().Set("Content-Type", "text/html")
 			io.WriteString(w, `<meta charset="GBK">`)
 		}
-		w.Write(gbk)
+		if r.URL.Path == "/folder/meta-utf8-valid" {
+			w.Write(ambiguousGBK)
+		} else {
+			w.Write(gbk)
+		}
 	}))
 	defer server.Close()
 	dir := t.TempDir()
@@ -114,13 +123,17 @@ func TestSniffPageDecodesGBKLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer q.Close()
-	for _, source := range []string{"header", "meta"} {
-		t.Run(source, func(t *testing.T) {
-			got, err := q.SniffPage(context.Background(), server.URL+"/folder/"+source)
+	for _, tc := range []struct{ source, name, escaped string }{
+		{"header", "资料.zip", "%E8%B5%84%E6%96%99.zip"},
+		{"meta", "资料.zip", "%E8%B5%84%E6%96%99.zip"},
+		{"meta-utf8-valid", "茅.zip", "%E8%8C%85.zip"},
+	} {
+		t.Run(tc.source, func(t *testing.T) {
+			got, err := q.SniffPage(context.Background(), server.URL+"/folder/"+tc.source)
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := []PageResource{{server.URL + "/folder/%E8%B5%84%E6%96%99.zip", "资料.zip", ".zip"}}
+			want := []PageResource{{server.URL + "/folder/" + tc.escaped, tc.name, ".zip"}}
 			if !slices.Equal(got, want) {
 				t.Fatalf("got %+v; want %+v", got, want)
 			}
