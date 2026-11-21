@@ -93,7 +93,7 @@ func (f filter) matches(job jobView) bool {
 }
 
 type palette struct {
-	ink, muted, line, paper, chrome, sidebar, accent, picked, track core.Color
+	ink, muted, line, paper, chrome, sidebar, accent, picked, track, failed core.Color
 }
 
 func workspace(queue *download.Queue) func(*core.Scope) core.Node {
@@ -138,10 +138,10 @@ func workspace(queue *download.Queue) func(*core.Scope) core.Node {
 		colors := func() palette {
 			if dark.Get() {
 				return palette{core.RGB(0xf4f4f5), core.RGB(0xa1a1aa), core.RGB(0x38383a), core.RGB(0x1c1c1e),
-					core.RGB(0x242426), core.RGB(0x202022), core.RGB(0x0a84ff), core.RGB(0x1e3a5f), core.RGB(0x38383a)}
+					core.RGB(0x242426), core.RGB(0x202022), core.RGB(0x0a84ff), core.RGB(0x1e3a5f), core.RGB(0x38383a), core.RGB(0x352326)}
 			}
 			return palette{core.RGB(0x18181b), core.RGB(0x71717a), core.RGB(0xe4e4e7), core.RGB(0xffffff),
-				core.RGB(0xfafafa), core.RGB(0xf4f4f5), core.RGB(0x007aff), core.RGB(0xeff6ff), core.RGB(0xe4e4e7)}
+				core.RGB(0xfafafa), core.RGB(0xf4f4f5), core.RGB(0x007aff), core.RGB(0xeff6ff), core.RGB(0xe4e4e7), core.RGB(0xfff1f2)}
 		}
 		rows := core.NewMemoFunc(cx, func() []jobView {
 			f, query := active.Get(), strings.ToLower(strings.TrimSpace(search.Get()))
@@ -190,9 +190,9 @@ func workspace(queue *download.Queue) func(*core.Scope) core.Node {
 			})
 		}
 		remove := core.NewSignal(cx, false)
-		toolbar, dialogs := workspaceControls(cx, queue, colors, directory.Get, concurrency.Get, queues.Get, active.Get,
+		toolbar, dialogs, empty := workspaceControls(cx, queue, colors, directory.Get, concurrency.Get, queues.Get, active.Get,
 			search, inspector, dark, message, remove, selected, jobs.Get, run, apply)
-		table := workspaceTable(cx, queue, colors, rows, queues.Get, selection, inspector, remove, sortOrder, run, apply)
+		table := workspaceTable(cx, queue, colors, rows, queues.Get, empty, selection, inspector, remove, sortOrder, run, apply)
 		return core.View{Style: core.Style{FlexGrow: 1, MinHeight: core.Pt(0)}, StyleFunc: func() core.Style {
 			return core.Style{Background: colors().paper}
 		}, Children: append([]core.Node{

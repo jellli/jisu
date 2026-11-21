@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -47,6 +48,107 @@ func TestWorkspaceFileIconsFollowJob(t *testing.T) {
 		if icon.StyleFunc().Color != wantTint {
 			t.Errorf("%q (%s): incorrect tint", tc.name, tc.state)
 		}
+	}
+}
+
+func TestFailureReason(t *testing.T) {
+	for _, tc := range []struct{ raw, want string }{
+		{"server returned HTTP 404", "文件不存在 (404)"},
+		{"server returned HTTP 403 for the full download", "无权访问 (403)"},
+		{"server returned HTTP 429 after 3 throttle retries", "请求过于频繁，被限流 (429)"},
+		{"server returned HTTP 500", "服务器错误 (500)"},
+		{"server returned HTTP 416", "服务器错误 (416)"},
+		{"request to host failed: dial tcp: lookup host: no such host", "连不上服务器"},
+		{"request to host failed: dial tcp: connection refused", "连不上服务器"},
+		{"request to host failed: context deadline exceeded (Client.Timeout exceeded while awaiting headers)", "连不上服务器"},
+		{"DNS failure", "连不上服务器"},
+		{"operation timed out", "连不上服务器"},
+		{"  disk full \n", "disk full"}, {"", ""},
+	} {
+		if got := failureReason(tc.raw); got != tc.want {
+			t.Errorf("failureReason(%q) = %q, want %q", tc.raw, got, tc.want)
+		}
+	}
+}
+
+func TestStatusCells(t *testing.T) {
+	total := int64(1000)
+	for _, tc := range []struct{ state, progress, speed string }{
+		{download.Downloading, "42.3%", "1.0 KiB/s"},
+		{download.Paused, "42.3% · 已暂停", ""},
+		{download.Failed, "42.3% · 下载失败", ""},
+		{download.Queued, "42.3% · 排队中", ""},
+		{download.Completed, "100% · 已完成", ""},
+	} {
+		job := jobView{Job: download.Job{ID: "test", State: tc.state, Total: &total, Received: 423, BytesPerSecond: 1024}}
+		for key, want := range map[string]string{"progress": tc.progress, "speed": tc.speed} {
+			if got := cellText(job, key); got != want {
+				t.Errorf("%s %s = %q, want %q", tc.state, key, got, want)
+			}
+		}
+	}
+	if cellText(jobView{}, "progress") != "" {
+		t.Fatal("empty row has progress")
+	}
+	if got := cellText(jobView{Job: download.Job{ID: "unknown", State: download.Paused}}, "progress"); got != "0% · 已暂停" {
+		t.Fatal(got)
+	}
+}
+
+func TestEmptyStateActions(t *testing.T) {
+	dir := t.TempDir()
+	queue, err := download.Open(filepath.Join(dir, "queue.json"), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(queue.Close)
+	app := nsgotest.Start(t, workspace(queue), nsgotest.Size(1100, 680), nsgotest.Idiom(core.IdiomDesktop), nsgotest.Measure())
+	app.Press("id:empty-new")
+	app.WaitFor("id:add-dialog", time.Second)
+	app.Press("text:取消")
+	app.Press("id:empty-sniff")
+	app.WaitFor("id:sniff-dialog", time.Second)
+	app.Press("text:关闭")
+	if nsgotest.Target() == "" {
+		app.OpenURL = func(string) bool { return false }
+		app.Press("id:empty-extension")
+		app.WaitFor("text:无法打开浏览器插件安装说明", time.Second)
+		if !slices.Equal(app.OpenedURLs, []string{"https://github.com/jellli/jisu#browser-takeover"}) {
+			t.Fatal(app.OpenedURLs)
+		}
+	}
+}
+
+func TestFailedRowRetry(t *testing.T) {
+	var retry atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if retry.Load() {
+			serveTestDownload(w, r)
+		} else {
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	dir := t.TempDir()
+	queue, err := download.Open(filepath.Join(dir, "queue.json"), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(queue.Close)
+	if err := queue.Add(server.URL + "/missing.zip"); err != nil {
+		t.Fatal(err)
+	}
+	app := nsgotest.Start(t, workspace(queue), nsgotest.Size(1100, 680), nsgotest.Idiom(core.IdiomDesktop), nsgotest.Measure())
+	app.WaitUntil(5*time.Second, func() bool {
+		app.Advance(250 * time.Millisecond)
+		return len(app.Query("text:文件不存在 (404)")) > 0
+	})
+	app.Press("text:missing.zip")
+	app.WaitFor("id:inspector >> text:文件不存在 (404)", time.Second)
+	retry.Store(true)
+	app.Press("id:retry-" + queue.State().Jobs[0].ID)
+	if job := queue.State().Jobs[0]; job.State == download.Failed && job.Error != "" {
+		t.Fatal("retry did not clear failure")
 	}
 }
 

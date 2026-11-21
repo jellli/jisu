@@ -16,7 +16,7 @@ import (
 func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() palette, directory func() string, concurrency func() int,
 	queues func() []string, active func() filter, search *core.Signal[string], inspector, dark *core.Signal[bool],
 	message *core.Signal[string], remove *core.Signal[bool], selected, all func() []jobView, run func(func() error) bool,
-	apply func([]jobView, func(jobView) bool, func(string) error)) (core.Node, []core.Node) {
+	apply func([]jobView, func(jobView) bool, func(string) error)) (core.Node, []core.Node, core.Node) {
 	newJob, settings, newQueue := core.NewSignal(cx, false), core.NewSignal(cx, false), core.NewSignal(cx, false)
 	url, destination, name := core.NewSignal(cx, ""), core.NewSignal(cx, download.DefaultQueue), core.NewSignal(cx, "")
 	proxyMode, proxyURL := core.NewSignal(cx, "system"), core.NewSignal(cx, "")
@@ -51,6 +51,22 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 	newButton.Variant = ui.ButtonPrimary
 	sniffButton, sniffDialog := workspaceSniff(cx, queue, colors, active, run, message.Set)
 	sniffButton.Icon = lucide.Radar
+	entry := func(id, caption string, action func()) core.Node {
+		button := compactButton(id, caption, action)
+		button.Size = ui.SizeLarge
+		return button
+	}
+	empty := core.View{TestID: "empty-state", Style: core.Style{Gap: 14, Width: core.Pt(260)}, Children: []core.Node{
+		entry("empty-new", "粘贴链接", openNew),
+		entry("empty-sniff", "嗅探网页", sniffButton.OnPress),
+		entry("empty-extension", "安装浏览器插件", func() {
+			cx.OpenURL("https://github.com/jellli/jisu#browser-takeover", func(ok bool) {
+				if !ok {
+					message.Set("无法打开浏览器插件安装说明")
+				}
+			})
+		}),
+	}}
 	resume := compactButton("resume-all", "开始全部", func() { apply(all(), canResume, queue.Resume) })
 	resume.Icon = lucide.Play
 	resume.Disabled = func() bool { return !slices.ContainsFunc(all(), canResume) }
@@ -184,7 +200,7 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 				remove.Set(false)
 				apply(selected(), anyJob, queue.Remove)
 			})}},
-	}
+	}, empty
 }
 
 func versionCaption() string {
@@ -278,7 +294,8 @@ func detailPanel(cx *core.Scope, queue *download.Queue, colors func() palette, s
 		return "已下载 " + formatBytes(float64(j.Received)) + " / " + cellText(j, "size") + " · " + cellText(j, "progress") + " · " + cellText(j, "speed")
 	}
 	failure := label("", 12, func() core.Color { return core.RGB(0xdc2626) })
-	failure.ContentFunc = func() string { return first().Error }
+	failure.ContentFunc = func() string { return failureReason(first().Error) }
+	failure.MaxLines = 0
 	var buttons []core.Node
 	for _, n := range []int{4, 8, 16, 32} {
 		button := compactButton(fmt.Sprintf("connections-%d", n), fmt.Sprint(n), func() {
@@ -304,7 +321,7 @@ func detailPanel(cx *core.Scope, queue *download.Queue, colors func() palette, s
 		Children: []core.Node{header, core.View{Style: core.Style{Gap: 12, Padding: core.All(12)}, Children: []core.Node{
 			core.Show{When: func() bool { return len(selected()) == 1 }, Else: func(*core.Scope) core.Node { return summary },
 				Then: func(*core.Scope) core.Node {
-					return core.View{Style: core.Style{Gap: 8}, Children: []core.Node{name, url, path,
+					return core.View{Style: core.Style{Gap: 8}, Children: []core.Node{name, url, path, failure,
 						core.Show{When: tab.Get,
 							Then: func(*core.Scope) core.Node {
 								reveal := compactButton("reveal", "在文件夹中显示", func() {
@@ -327,7 +344,7 @@ func detailPanel(cx *core.Scope, queue *download.Queue, colors func() palette, s
 								return core.View{Style: core.Style{Gap: 8}, Children: []core.Node{
 									core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 6},
 										Children: append([]core.Node{progress, core.View{Style: core.Style{FlexGrow: 1}}, connections}, buttons...)},
-									progressBars(colors, first, 10), failure,
+									progressBars(colors, first, 10),
 								}}
 							}}, proxySection,
 					}}
