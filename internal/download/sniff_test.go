@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
 func TestSniffPageDirectLinks(t *testing.T) {
@@ -90,11 +92,49 @@ func TestSniffPageUsesCustomProxy(t *testing.T) {
 	}
 }
 
+func TestSniffPageDecodesGBKLinks(t *testing.T) {
+	gbk, err := simplifiedchinese.GBK.NewEncoder().Bytes([]byte(`<a href="资料.zip">下载</a>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/folder/header":
+			w.Header().Set("Content-Type", "text/html; charset=GBK")
+		case "/folder/meta":
+			w.Header().Set("Content-Type", "text/html")
+			io.WriteString(w, `<meta charset="GBK">`)
+		}
+		w.Write(gbk)
+	}))
+	defer server.Close()
+	dir := t.TempDir()
+	q, err := Open(filepath.Join(dir, "queue.json"), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer q.Close()
+	for _, source := range []string{"header", "meta"} {
+		t.Run(source, func(t *testing.T) {
+			got, err := q.SniffPage(context.Background(), server.URL+"/folder/"+source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := []PageResource{{server.URL + "/folder/%E8%B5%84%E6%96%99.zip", "资料.zip", ".zip"}}
+			if !slices.Equal(got, want) {
+				t.Fatalf("got %+v; want %+v", got, want)
+			}
+		})
+	}
+}
+
 func TestSniffPageResponseHandling(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/empty":
 			io.WriteString(w, "<html><a href='/about'>About</a></html>")
+		case "/empty-body":
+			w.Header().Set("Content-Type", "text/html")
 		case "/pdf":
 			w.Header().Set("Content-Type", "application/pdf")
 		case "/large":
@@ -112,7 +152,7 @@ func TestSniffPageResponseHandling(t *testing.T) {
 	}
 	defer q.Close()
 	for _, tc := range []struct{ path, errorText string }{
-		{"/empty", ""}, {"/pdf", "HTML page"}, {"/large", "4 MiB"}, {"/missing", "HTTP 404"},
+		{"/empty", ""}, {"/empty-body", ""}, {"/pdf", "HTML page"}, {"/large", "4 MiB"}, {"/missing", "HTTP 404"},
 	} {
 		t.Run(tc.path, func(t *testing.T) {
 			got, err := q.SniffPage(context.Background(), server.URL+tc.path)

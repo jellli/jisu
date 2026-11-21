@@ -15,6 +15,7 @@ import (
 
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
+	"golang.org/x/net/html/charset"
 )
 
 const maxPageBytes = 4 << 20
@@ -38,7 +39,8 @@ func (q *Queue) SniffPage(ctx context.Context, rawURL string) ([]PageResource, e
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return nil, fmt.Errorf("page returned HTTP %d", resp.StatusCode)
 	}
-	if header := resp.Header.Get("Content-Type"); header != "" {
+	header := resp.Header.Get("Content-Type")
+	if header != "" {
 		mediaType, _, _ := mime.ParseMediaType(header)
 		if mediaType != "text/html" && mediaType != "application/xhtml+xml" {
 			return nil, errors.New("URL did not return an HTML page")
@@ -51,7 +53,14 @@ func (q *Queue) SniffPage(ctx context.Context, rawURL string) ([]PageResource, e
 	if len(body) > maxPageBytes {
 		return nil, errors.New("HTML page is larger than 4 MiB")
 	}
-	doc, err := html.Parse(bytes.NewReader(body))
+	if len(body) == 0 {
+		return nil, nil
+	}
+	decoded, err := charset.NewReader(bytes.NewReader(body), header)
+	if err != nil {
+		return nil, err
+	}
+	doc, err := html.Parse(decoded)
 	if err != nil {
 		return nil, err
 	}
