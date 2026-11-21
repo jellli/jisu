@@ -247,6 +247,15 @@ func TestKiteWorkspace(t *testing.T) {
 	screenshot("06-move-down")
 
 	app.Press(first)
+	app.WaitFor("id:inspector", timeout)
+	waitLive("text:活跃连接 8 / 8")
+	if nsgotest.Target() == "" {
+		app.Advance(500 * time.Millisecond)
+	} else {
+		time.Sleep(500 * time.Millisecond)
+	}
+	app.Press(first)
+	app.WaitForGone("id:inspector", timeout)
 	app.Press("id:toggle-inspector")
 	app.WaitFor("id:inspector", timeout)
 	waitLive("text:活跃连接 8 / 8")
