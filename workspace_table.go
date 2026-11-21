@@ -208,18 +208,17 @@ func workspaceTable(cx *core.Scope, queue *download.Queue, colors func() palette
 					selection.Set(ids)
 				}}
 			}, Else: func(*core.Scope) core.Node {
-				if cell().Key == "eta" {
-					return core.Show{When: func() bool { return get().State == download.Failed }, Then: func(*core.Scope) core.Node {
-						return compactButton("retry-"+get().ID, "重试", func() { run(func() error { return queue.Resume(get().ID) }) })
-					}, Else: func(*core.Scope) core.Node { return text }}
-				}
-				return core.Show{When: func() bool { return cell().Key == "progress" }, Then: func(*core.Scope) core.Node {
-					return core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, FlexGrow: 1, Gap: 8},
-						Children: []core.Node{progressBars(colors, get, 5), text}}
+				return core.Show{When: func() bool { return cell().Key == "eta" && get().State == download.Failed }, Then: func(*core.Scope) core.Node {
+					return compactButton("retry-"+get().ID, "重试", func() { run(func() error { return queue.Resume(get().ID) }) })
 				}, Else: func(*core.Scope) core.Node {
-					return core.Show{When: func() bool { return cell().Key == "name" }, Then: func(*core.Scope) core.Node {
-						return nameCell(colors, get, text)
-					}, Else: func(*core.Scope) core.Node { return text }}
+					return core.Show{When: func() bool { return cell().Key == "progress" }, Then: func(*core.Scope) core.Node {
+						return core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, FlexGrow: 1, Gap: 8},
+							Children: []core.Node{progressBars(colors, get, 5), text}}
+					}, Else: func(*core.Scope) core.Node {
+						return core.Show{When: func() bool { return cell().Key == "name" }, Then: func(*core.Scope) core.Node {
+							return nameCell(colors, get, text)
+						}, Else: func(*core.Scope) core.Node { return text }}
+					}}
 				}}
 			}}
 		},
