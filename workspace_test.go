@@ -103,6 +103,8 @@ func TestEmptyStateActions(t *testing.T) {
 	}
 	t.Cleanup(queue.Close)
 	app := nsgotest.Start(t, workspace(queue), nsgotest.Size(1100, 680), nsgotest.Idiom(core.IdiomDesktop), nsgotest.Measure())
+	app.WaitFor("text:还没有下载任务", time.Second)
+	app.WaitFor("text:粘贴一个下载链接，或让 jisu 从网页里找出可下载的文件", time.Second)
 	app.Press("id:empty-new")
 	app.WaitFor("id:add-dialog", time.Second)
 	app.Press("text:取消")
@@ -116,6 +118,24 @@ func TestEmptyStateActions(t *testing.T) {
 		if !slices.Equal(app.OpenedURLs, []string{"https://github.com/jellli/jisu#browser-takeover"}) {
 			t.Fatal(app.OpenedURLs)
 		}
+	}
+}
+
+func TestDownloadSummary(t *testing.T) {
+	for _, tc := range []struct{ state, want string }{
+		{download.Failed, "已下载 0 B / — · 0% · 下载失败"},
+		{download.Paused, "已下载 0 B / — · 0% · 已暂停"},
+		{download.Queued, "已下载 0 B / — · 0% · 排队中"},
+		{download.Completed, "已下载 0 B / — · 100% · 已完成"},
+		{download.Downloading, "已下载 0 B / — · 0% · 1.0 KiB/s"},
+	} {
+		job := jobView{Job: download.Job{ID: "summary", State: tc.state, BytesPerSecond: 1024}}
+		if got := downloadSummary(job); got != tc.want {
+			t.Errorf("%s summary = %q, want %q", tc.state, got, tc.want)
+		}
+	}
+	if got := downloadSummary(jobView{}); got != "" {
+		t.Errorf("empty summary = %q", got)
 	}
 }
 

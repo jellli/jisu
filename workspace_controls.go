@@ -54,9 +54,17 @@ func workspaceControls(cx *core.Scope, queue *download.Queue, colors func() pale
 	entry := func(id, caption string, action func()) core.Node {
 		button := compactButton(id, caption, action)
 		button.Size = ui.SizeLarge
+		if id == "empty-new" {
+			button.Variant = ui.ButtonPrimary
+		}
+		button.Style.Width = core.Pt(260)
 		return button
 	}
-	empty := core.View{TestID: "empty-state", Style: core.Style{Gap: 14, Width: core.Pt(260)}, Children: []core.Node{
+	title := label("还没有下载任务", 18, func() core.Color { return colors().ink })
+	title.Style.FontWeight = 600
+	explanation := label("粘贴一个下载链接，或让 jisu 从网页里找出可下载的文件", 12, func() core.Color { return colors().muted })
+	empty := core.View{TestID: "empty-state", Style: core.Style{Gap: 14, AlignItems: core.AlignCenter}, Children: []core.Node{
+		title, explanation,
 		entry("empty-new", "粘贴链接", openNew),
 		entry("empty-sniff", "嗅探网页", sniffButton.OnPress),
 		entry("empty-extension", "安装浏览器插件", func() {
@@ -290,8 +298,7 @@ func detailPanel(cx *core.Scope, queue *download.Queue, colors func() palette, s
 	}
 	progress := label("", 12, func() core.Color { return colors().muted })
 	progress.ContentFunc = func() string {
-		j := first()
-		return "已下载 " + formatBytes(float64(j.Received)) + " / " + cellText(j, "size") + " · " + cellText(j, "progress") + " · " + cellText(j, "speed")
+		return downloadSummary(first())
 	}
 	failure := label("", 12, func() core.Color { return core.RGB(0xdc2626) })
 	failure.ContentFunc = func() string { return failureReason(first().Error) }
@@ -350,4 +357,13 @@ func detailPanel(cx *core.Scope, queue *download.Queue, colors func() palette, s
 					}}
 				}},
 		}}}}
+}
+
+func downloadSummary(job jobView) string {
+	if job.ID == "" {
+		return ""
+	}
+	parts := []string{"已下载 " + formatBytes(float64(job.Received)) + " / " + cellText(job, "size"), cellText(job, "progress"), cellText(job, "speed")}
+	parts = slices.DeleteFunc(parts, func(part string) bool { return part == "" })
+	return strings.Join(parts, " · ")
 }
