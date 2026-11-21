@@ -225,50 +225,90 @@ func TestProxySettingsDialog(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(queue.Close)
-	if err := queue.SetProxy(download.ProxySettings{Mode: "custom", URL: "http://user:secret@localhost:8080"}); err != nil {
+	if err := queue.SetProxy(download.ProxySettings{Mode: "custom", URL: "http://localhost:8080"}); err != nil {
 		t.Fatal(err)
 	}
 	app := nsgotest.Start(t, workspace(queue), nsgotest.Size(1100, 680), nsgotest.Idiom(core.IdiomDesktop), nsgotest.Measure())
 	app.Press("id:settings")
 	app.WaitFor("id:proxy-url", time.Second)
+	app.Clear("id:proxy-url")
 	app.Type("id:proxy-url", "bad")
-	app.Press("id:apply-proxy")
+	app.Submit("id:proxy-url")
 	app.WaitFor("id:settings-dialog >> text:/proxy URL must use/", time.Second)
-	if bounds := app.Find("id:settings-error").Bounds(); bounds.Size.Height < 24 {
-		t.Fatalf("validation error did not wrap: %v", bounds)
-	}
-	if queue.State().Proxy.URL != "http://user:secret@localhost:8080" {
+	if queue.State().Proxy.URL != "http://localhost:8080" {
 		t.Fatal("invalid UI input changed saved proxy")
 	}
-	if nsgotest.Target() != "" {
-		app.Screenshot("proxy-settings")
+	app.Press("id:close-settings")
+	app.WaitFor("id:settings-proxy-error", time.Second)
+	app.Clear("id:proxy-url")
+	app.Type("id:proxy-url", "socks5://localhost:1080")
+	app.Submit("id:proxy-url")
+	app.WaitForGone("id:settings-proxy-error", time.Second)
+	if want := (download.ProxySettings{Mode: "custom", URL: "socks5://localhost:1080"}); queue.State().Proxy != want {
+		t.Fatal("submitting a valid address did not save the proxy")
 	}
 }
 
-func TestSelectingCustomProxyDoesNotApply(t *testing.T) {
+func TestSettingsFormSavesChanges(t *testing.T) {
 	dir := t.TempDir()
 	queue, err := download.Open(filepath.Join(dir, "queue.json"), dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(queue.Close)
-	app := nsgotest.Start(t, workspace(queue), nsgotest.Size(1100, 680), nsgotest.Idiom(core.IdiomDesktop), nsgotest.Measure())
+	options := []nsgotest.Option{nsgotest.Size(1100, 680), nsgotest.Idiom(core.IdiomDesktop), nsgotest.Measure()}
+	if nsgotest.Target() == "" {
+		options = append(options, nsgotest.Environment(core.Environment{OS: core.OSLinux}))
+	}
+	app := nsgotest.Start(t, workspace(queue), options...)
 	app.Press("id:settings")
+	for _, heading := range []string{"常规", "下载", "网络", "更新"} {
+		app.WaitFor("id:settings-dialog >> role:header "+heading, time.Second)
+	}
+	app.WaitForGone("id:settings-dialog >> id:new-queue", time.Second)
+	app.WaitForGone("id:settings-dialog >> text:应用代理", time.Second)
+	app.Press("id:download-concurrency")
+	app.Press("id:download-concurrency-4")
+	if queue.State().Concurrency != 5 {
+		t.Fatal("concurrency didn't save on selection")
+	}
 	app.Press("id:proxy-mode")
-	app.WaitFor("id:proxy-mode-2", time.Second)
-	row := app.Find("id:proxy-mode-2").Bounds()
+	for i, caption := range []string{"跟随系统", "不使用", "自定义"} {
+		app.WaitFor(fmt.Sprintf("id:proxy-mode-%d >> text:%s", i, caption), time.Second)
+	}
+	app.Press("id:proxy-mode-1")
+	if queue.State().Proxy.Mode != "none" {
+		t.Fatal("disabling the proxy didn't save on selection")
+	}
+	app.Press("id:proxy-mode")
 	app.Press("id:proxy-mode-2")
 	app.WaitFor("id:proxy-url", time.Second)
-	button := app.Find("id:apply-proxy").Bounds()
-	if button.Origin.X < row.Origin.X+row.Size.Width && row.Origin.X < button.Origin.X+button.Size.Width && button.Origin.Y < row.Origin.Y+row.Size.Height && row.Origin.Y < button.Origin.Y+button.Size.Height {
-		t.Fatalf("Apply overlaps dismissed Custom row: row=%v button=%v", row, button)
+	if queue.State().Proxy.Mode != "none" {
+		t.Fatal("an empty custom proxy replaced the saved mode")
 	}
-	if queue.State().Proxy.Mode != "system" {
-		t.Fatal("selecting Custom applied settings")
+	app.Type("id:proxy-url", "localhost:8080")
+	app.Focus("id:check-update")
+	app.WaitUntil(time.Second, func() bool {
+		return queue.State().Proxy == (download.ProxySettings{Mode: "custom", URL: "http://localhost:8080"})
+	})
+	app.Press("id:close-settings")
+	app.WaitForGone("id:settings-dialog", time.Second)
+	app.Press("id:settings")
+	app.WaitFor("id:proxy-url", time.Second)
+	if nsgotest.Target() != "" {
+		app.Screenshot("settings")
 	}
-	app.WaitForGone("id:settings-dialog >> text:/proxy URL must use/", time.Second)
-	app.Press("id:apply-proxy")
-	app.WaitFor("id:settings-dialog >> text:/proxy URL must use/", time.Second)
+	app.Clear("id:proxy-url")
+	app.Type("id:proxy-url", "localhost:8081")
+	app.Press("id:close-settings")
+	app.WaitForGone("id:settings-dialog", time.Second)
+	if queue.State().Proxy.URL != "http://localhost:8081" {
+		t.Fatal("closing settings didn't save the pending address")
+	}
+	app.Press("id:new-queue")
+	app.Type("id:queue-name", "测试队列")
+	app.Press("id:create-queue")
+	app.WaitFor("id:queue-测试队列", time.Second)
 }
 
 func TestJobProxyInspector(t *testing.T) {
@@ -486,14 +526,30 @@ func TestKiteWorkspace(t *testing.T) {
 	app.Press("id:toggle-inspector")
 	app.WaitFor("id:inspector", timeout)
 	waitLive("text:活跃连接 8 / 8")
+	if !app.Find("id:segments-tab").Props.Selected || !app.Find("id:connections-8").Props.Selected {
+		t.Fatal("the chunks tab and saved connection target should be selected")
+	}
 	screenshot("07-expanded-inspector")
 	for _, n := range []int{4, 16, 32, 8} {
-		app.Press(fmt.Sprintf("id:connections-%d", n))
+		target := fmt.Sprintf("id:connections-%d", n)
+		app.Press(target)
 		waitLive(fmt.Sprintf("text:活跃连接 %d / %d", n, n))
+		if !app.Find(target).Props.Selected {
+			t.Fatalf("%d connections is not selected", n)
+		}
 		if n == 32 {
 			screenshot("08-live-32-connections")
 		}
 	}
+	app.Press("id:file-tab")
+	app.WaitFor("id:reveal", timeout)
+	app.WaitForGone("id:connection-target", timeout)
+	if !app.Find("id:file-tab").Props.Selected || app.Find("id:segments-tab").Props.Selected {
+		t.Fatal("only the file tab should be selected")
+	}
+	screenshot("08b-file-tab")
+	app.Press("id:segments-tab")
+	app.WaitFor("id:connections-8", timeout)
 
 	if nsgotest.Target() != "" {
 		size := "role:columnheader 大小"

@@ -190,7 +190,7 @@ func workspace(queue *download.Queue) func(*core.Scope) core.Node {
 			})
 		}
 		remove := core.NewSignal(cx, false)
-		toolbar, dialogs, empty := workspaceControls(cx, queue, colors, directory.Get, concurrency.Get, queues.Get, active.Get,
+		toolbar, dialogs, empty, openQueue := workspaceControls(cx, queue, colors, directory.Get, concurrency.Get, queues.Get, active.Get,
 			search, inspector, dark, message, remove, selected, jobs.Get, run, apply)
 		table := workspaceTable(cx, queue, colors, rows, queues.Get, empty, selection, inspector, remove, sortOrder, run, apply)
 		return core.View{Style: core.Style{FlexGrow: 1, MinHeight: core.Pt(0)}, StyleFunc: func() core.Style {
@@ -198,7 +198,7 @@ func workspace(queue *download.Queue) func(*core.Scope) core.Node {
 		}, Children: append([]core.Node{
 			toolbar,
 			core.View{Style: core.Style{Direction: core.Row, FlexGrow: 1, MinHeight: core.Pt(0)}, Children: []core.Node{
-				sidebar(colors, jobs.Get, queues.Get, active.Get, selectView),
+				sidebar(colors, jobs.Get, queues.Get, active.Get, selectView, openQueue),
 				core.View{Style: core.Style{FlexGrow: 1, MinWidth: core.Pt(0)}, Children: []core.Node{
 					table,
 					core.Show{When: inspector.Get, Then: func(scope *core.Scope) core.Node {
@@ -217,7 +217,7 @@ func label(text string, size core.Points, color func() core.Color) core.Text {
 	}}
 }
 
-func sidebar(colors func() palette, jobs func() []jobView, queues func() []string, active func() filter, selectView func(filter)) core.Node {
+func sidebar(colors func() palette, jobs func() []jobView, queues func() []string, active func() filter, selectView func(filter), openQueue func()) core.Node {
 	item := func(f filter) core.Node {
 		title := label(f.label, 12, func() core.Color { return colors().ink })
 		title.Style.FlexGrow = 1
@@ -242,10 +242,12 @@ func sidebar(colors func() palette, jobs func() []jobView, queues func() []strin
 				return core.Style{}
 			}, Children: []core.Node{ui.Icon(f.icon(), 14, func() core.Color { return colors().muted }), title, count}}
 	}
-	section := func(title string, children []core.Node) core.View {
+	section := func(title string, children []core.Node, actions ...core.Node) core.View {
 		head := label(title, 10, func() core.Color { return colors().muted })
-		head.Style.Margin = core.Edges{Top: 8, Bottom: 3, Left: 8}
-		return core.View{Style: core.Style{Gap: 1}, Children: append([]core.Node{head}, children...)}
+		head.Style.FlexGrow = 1
+		header := core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Padding: core.Symmetric(0, 8),
+			Margin: core.Edges{Top: 8, Bottom: 3}}, Children: append([]core.Node{head}, actions...)}
+		return core.View{Style: core.Style{Gap: 1}, Children: append([]core.Node{header}, children...)}
 	}
 	static := func(group []filter) []core.Node {
 		items := make([]core.Node, 0, len(group))
@@ -262,7 +264,7 @@ func sidebar(colors func() palette, jobs func() []jobView, queues func() []strin
 			section("分类筛选", static(categoryFilters)),
 			section("队列", []core.Node{core.Each(queues, func(key string) string { return key }, func(_ *core.Scope, key func() string, _ func() int) core.Node {
 				return item(filter{"queue", key(), queueLabel(key())})
-			})}),
+			})}, ui.IconButton{TestID: "new-queue", Label: "新建队列", Icon: lucide.Plus, Size: 22, OnPress: openQueue}),
 		}}}}
 }
 
