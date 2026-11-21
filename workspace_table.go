@@ -18,7 +18,7 @@ const segmentCount = 16
 
 var columns = []datatable.Column{
 	{Key: "selection", Title: " ", Width: 37, Fixed: true, NoResize: true, NoMove: true, NoSelect: true, Align: datatable.AlignCenterColumn},
-	{Key: "name", Title: "文件名 / 协议", Width: 266, MinWidth: 130},
+	{Key: "name", Title: "文件名", Width: 266, MinWidth: 130},
 	{Key: "size", Title: "大小", Width: 96, MinWidth: 67, Align: datatable.AlignEndColumn},
 	{Key: "progress", Title: "进度与分块", Width: 210, MinWidth: 135},
 	{Key: "speed", Title: "速度", Width: 105, MinWidth: 88, Align: datatable.AlignEndColumn},

@@ -381,8 +381,8 @@ func TestKiteWorkspace(t *testing.T) {
 			t.Fatalf("column width did not increase: before %v, after %v", before, after)
 		}
 		app.Drag(size, core.Point{X: -20}, core.Point{X: -277})
-		if after := app.Find(size).Bounds(); after.Origin.X >= app.Find("role:columnheader 文件名 / 协议").Bounds().Origin.X {
-			t.Fatalf("大小 did not move ahead of 文件名 / 协议: %v", after)
+		if after := app.Find(size).Bounds(); after.Origin.X >= app.Find("role:columnheader 文件名").Bounds().Origin.X {
+			t.Fatalf("大小 did not move ahead of 文件名: %v", after)
 		}
 		screenshot("09-column-layout")
 	}
