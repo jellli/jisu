@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jellli/jisu/internal/download"
+	"github.com/nsgo-dev/nsgo/base/datatable"
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/ui"
 )
@@ -112,6 +113,7 @@ func workspace(queue *download.Queue) func(*core.Scope) core.Node {
 		message := core.NewSignal(cx, "")
 		selection := core.NewSignalFunc(cx, []string(nil), slices.Equal)
 		inspector := core.NewSignal(cx, false)
+		sortOrder := core.NewSignal(cx, datatable.Sort{})
 		dark := core.NewSignal(cx, false)
 		colors := func() palette {
 			if dark.Get() {
@@ -129,6 +131,7 @@ func workspace(queue *download.Queue) func(*core.Scope) core.Node {
 					visible = append(visible, job)
 				}
 			}
+			sortJobs(visible, sortOrder.Get())
 			return visible
 		}, slices.Equal).Get
 		selectView := func(f filter) {
@@ -169,7 +172,7 @@ func workspace(queue *download.Queue) func(*core.Scope) core.Node {
 		remove := core.NewSignal(cx, false)
 		toolbar, dialogs := workspaceControls(cx, queue, colors, directory.Get, concurrency.Get, queues.Get, active.Get,
 			search, inspector, dark, message, remove, selected, jobs.Get, run, apply)
-		table := workspaceTable(cx, queue, colors, rows, queues.Get, selection, inspector, remove, run, apply)
+		table := workspaceTable(cx, queue, colors, rows, queues.Get, selection, inspector, remove, sortOrder, run, apply)
 		return core.View{Style: core.Style{FlexGrow: 1, MinHeight: core.Pt(0)}, StyleFunc: func() core.Style {
 			return core.Style{Background: colors().paper}
 		}, Children: append([]core.Node{

@@ -26,7 +26,24 @@ var columns = []datatable.Column{
 
 func workspaceTable(cx *core.Scope, queue *download.Queue, colors func() palette, rows func() []jobView,
 	queues func() []string, selection *core.Signal[[]string], inspector, remove *core.Signal[bool],
+	sortOrder *core.Signal[datatable.Sort],
 	run func(func() error) bool, apply func([]jobView, func(jobView) bool, func(string) error)) core.Node {
+	width := core.NewSignal(cx, core.Points(0))
+	openFile := func(job jobView) {
+		if job.State != download.Completed {
+			return
+		}
+		path, err := queue.CompletedPath(job.ID)
+		if err != nil {
+			run(func() error { return err })
+			return
+		}
+		cx.OpenFile(core.SharedFile{Path: path}, func(_ bool, err error) {
+			if err != nil {
+				run(func() error { return err })
+			}
+		})
+	}
 	rowAt := func(i int) jobView {
 		visible := rows()
 		if i >= 0 && i < len(visible) {
@@ -95,17 +112,26 @@ func workspaceTable(cx *core.Scope, queue *download.Queue, colors func() palette
 		}
 		desktop.PopupMenu(cx, []desktop.MenuItem{
 			action("暂停", canPause, queue.Pause), action("继续 / 重试", canResume, queue.Resume),
-			{Label: "打开文件", Disabled: clicked.State != download.Completed, OnSelect: func() {
-				path, err := queue.CompletedPath(clicked.ID)
-				if err != nil {
-					run(func() error { return err })
-					return
-				}
-				cx.OpenFile(core.SharedFile{Path: path}, func(_ bool, err error) {
+			{Label: "打开文件", Disabled: clicked.State != download.Completed, OnSelect: func() { openFile(clicked) }},
+			{Label: "打开文件夹", OnSelect: func() {
+				if clicked.State == download.Completed {
+					path, err := queue.CompletedPath(clicked.ID)
 					if err != nil {
 						run(func() error { return err })
+						return
 					}
-				})
+					cx.RevealFile(path, func(err error) {
+						if err != nil {
+							run(func() error { return err })
+						}
+					})
+				} else {
+					cx.OpenFile(core.SharedFile{Path: clicked.Directory}, func(_ bool, err error) {
+						if err != nil {
+							run(func() error { return err })
+						}
+					})
+				}
 			}},
 			{Label: "显示详情", OnSelect: func() { inspector.Set(true) }},
 			{Separator: true},
@@ -117,8 +143,18 @@ func workspaceTable(cx *core.Scope, queue *download.Queue, colors func() palette
 		}, event.At, nil)
 	}
 	return datatable.DataTable{
-		Columns: func() []datatable.Column { return columns }, RowCount: func() int { return len(rows()) },
-		Text: func(i, j int) string { return cellText(rowAt(i), columns[j].Key) },
+		Columns: func() []datatable.Column { return tableColumns(width.Get()) }, RowCount: func() int { return len(rows()) },
+		OnLayout: func(bounds core.Bounds) { width.Set(bounds.Size.Width) },
+		Sort:     sortOrder.Get,
+		OnSortChange: func(next datatable.Sort) {
+			if next.Key == "" {
+				next = sortOrder.Get()
+				next.Descending = false
+			}
+			sortOrder.Set(next)
+		},
+		OnDoublePress: func(row, _ int) { openFile(rowAt(row)) },
+		Text:          func(i, j int) string { return cellText(rowAt(i), columns[j].Key) },
 		RenderHeaderCell: func(_ *core.Scope, cell func() datatable.HeaderCell) core.Node {
 			return core.Show{
 				When: func() bool { return cell().Key == "selection" },
@@ -130,11 +166,15 @@ func workspaceTable(cx *core.Scope, queue *download.Queue, colors func() palette
 				},
 				Else: func(*core.Scope) core.Node {
 					title := label("", 11, func() core.Color { return colors().muted })
-					title.ContentFunc = func() string { return cell().Title }
+					title.ContentFunc = func() string { return sortHeaderTitle(cell().Title, cell().Key, sortOrder.Get()) }
 					title.StyleFunc = func() core.Style {
 						return core.Style{Color: colors().muted, TextAlign: columnAlignment(cell().Column)}
 					}
-					return title
+					return core.View{Role: core.RoleButton, LabelFunc: func() string { return cell().Title },
+						Style: core.Style{FlexGrow: 1}, OnPress: func(core.PressEvent) {
+							current := sortOrder.Get()
+							sortOrder.Set(datatable.Sort{Key: cell().Key, Descending: current.Key == cell().Key && !current.Descending})
+						}, Children: []core.Node{title}}
 				},
 			}
 		},
@@ -193,6 +233,9 @@ func workspaceTable(cx *core.Scope, queue *download.Queue, colors func() palette
 					ids = append(ids, id)
 				}
 				selection.Set(ids)
+			} else if press.Clicks == 1 {
+				id := rowAt(press.Row).ID
+				inspector.Set(!(inspector.Get() && len(previous) == 1 && previous[0] == id))
 			}
 		},
 		Style:     core.Style{FlexGrow: 1, MinHeight: core.Pt(0)},
