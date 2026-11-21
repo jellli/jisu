@@ -22,6 +22,14 @@ func TestProbe(t *testing.T) {
 			fmt.Fprint(w, "x")
 		case "/empty":
 			w.Header().Set("Content-Length", "0")
+		case "/empty-range":
+			w.Header().Set("Content-Range", "bytes */0")
+			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+		case "/invalid-range":
+			w.Header().Set("Content-Range", "bytes */123")
+			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+		case "/missing-range":
+			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
 		case "/unknown":
 			w.(http.Flusher).Flush()
 		case "/error":
@@ -41,6 +49,7 @@ func TestProbe(t *testing.T) {
 		known, failed bool
 	}{
 		{"/range", 12345, true, false}, {"/empty", 0, true, false},
+		{"/empty-range", 0, true, false}, {"/invalid-range", 0, false, true}, {"/missing-range", 0, false, true},
 		{"/unknown", 0, false, false}, {"/error", 0, false, true},
 	} {
 		t.Run(tc.path, func(t *testing.T) {

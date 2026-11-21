@@ -25,6 +25,9 @@ func (q *Queue) Probe(ctx context.Context, rawURL string) (Metadata, error) {
 		return Metadata{}, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusRequestedRangeNotSatisfiable && resp.Header.Get("Content-Range") == "bytes */0" {
+		return Metadata{Name: responseName(resp, ""), Size: new(int64(0))}, nil
+	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 		return Metadata{}, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
